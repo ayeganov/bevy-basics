@@ -16,12 +16,13 @@ use asset_loader::AssetLoaderPlugin;
 use asteroids::AsteroidPlugin;
 use camera::CameraPlugin;
 use collision_detection::CollisionDetectionPlugin;
-use debug::DebugPlugin;
+//use debug::DebugPlugin;
 use despawn::DespawnPlugin;
 use movement::MovementPlugin;
 use schedule::SchedulePlugin;
 use spaceship::SpaceshipPlugin;
 use state::StatePlugin;
+use bevy_mod_picking::prelude::*;
 
 fn main() {
     App::new()
@@ -42,6 +43,7 @@ fn main() {
         .add_plugins(DespawnPlugin)
         .add_plugins(SchedulePlugin)
         .add_plugins(StatePlugin)
+        .add_plugins(DefaultPickingPlugins)
         // .add_plugins(DebugPlugin)
         .run();
 }
