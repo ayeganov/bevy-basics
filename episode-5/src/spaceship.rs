@@ -1,3 +1,4 @@
+use bevy::asset::LoadState;
 use bevy::core_pipeline::clear_color::ClearColorConfig;
 use bevy::{
     prelude::*,
@@ -56,29 +57,56 @@ pub struct Vision
 
 
 #[derive(Component)]
-pub struct UnpickableGLTF;
+pub struct NotYetPickable;
 
+
+#[derive(Resource)]
+struct PickingAssigned(bool);
 
 
 pub struct SpaceshipPlugin;
 
 
-impl Plugin for SpaceshipPlugin {
-  fn build(&self, app: &mut App) {
-    app.add_systems(PostStartup, (spawn_spaceship, make_spaceship_pickable.after(spawn_spaceship)))
-        .add_systems(OnEnter(GameState::GameOver), spawn_spaceship)
-        .add_systems(
-            Update,
-            (
-                spaceship_movement_controls,
-                spaceship_weapon_controls,
-                spaceship_shield_controls,
-                draw_selected_vision,
-            )
-                .chain()
-                .in_set(InGameSet::UserInput),
+impl Plugin for SpaceshipPlugin
+{
+  fn build(&self, app: &mut App)
+  {
+    app.add_systems(PostStartup, (spawn_spaceship,))
+      .add_systems(Startup, setup)
+      .add_systems(OnEnter(GameState::GameOver), spawn_spaceship)
+      .add_systems(
+        Update,
+        (
+          spaceship_movement_controls,
+          spaceship_weapon_controls,
+          spaceship_shield_controls,
+          draw_selected_vision,
+          process_picked_stuff,
         )
-        .add_systems(Update, spaceship_destroyed.in_set(InGameSet::EntityUpdates));
+        .chain()
+        .in_set(InGameSet::UserInput),
+      )
+      .add_systems(Update, make_spaceship_pickable.run_if(need_pick_setup))
+      .add_systems(Update, spaceship_destroyed.in_set(InGameSet::EntityUpdates));
+  }
+}
+
+
+fn setup(mut commands: Commands)
+{
+  info!("Picking has not been assigned yet");
+  commands.insert_resource(PickingAssigned(false));
+}
+
+
+fn process_picked_stuff(query: Query<(Entity, &PickSelection)>)
+{
+  for (_, pick) in query.iter()
+  {
+    if pick.is_selected
+    {
+      info!("You got the pick");
+    }
   }
 }
 
@@ -179,11 +207,12 @@ fn set_pickible_recursive(
   entity: &Entity,
   mesh_query: &Query<Entity, With<Handle<Mesh>>>,
   children_query: &Query<&Children>,
-)
+) -> bool
 {
+  let mut pickable_set = !mesh_query.is_empty();
+
   for mesh_entity in mesh_query.iter()
   {
-    info!("Yay!, we got it!");
     commands.entity(mesh_entity).insert(PickableBundle::default());
   }
 
@@ -191,77 +220,99 @@ fn set_pickible_recursive(
   {
     for child in children.iter()
     {
-      set_pickible_recursive(commands, child, mesh_query, children_query);
+      pickable_set |= set_pickible_recursive(commands, child, mesh_query, children_query);
     }
   }
+
+  pickable_set
+}
+
+
+fn need_pick_setup(scene_assets: Res<SceneAssets>,
+                   asset_server: Res<AssetServer>,
+                   unpickable_query: Query<(Entity, &Children), With<NotYetPickable>>,
+                   ) -> bool
+{
+  asset_server.is_loaded_with_dependencies(scene_assets.spaceship.id()) && !unpickable_query.is_empty()
 }
 
 
 fn make_spaceship_pickable(
   mut commands: Commands,
-  mut unpickable_query: Query<(Entity, &Children), With<UnpickableGLTF>>,
-  mesh_query: Query<(Entity), With<Handle<Mesh>>>,
-  children_query: Query<&Children>
+  mut unpickable_query: Query<(Entity, &Children), With<NotYetPickable>>,
+  mesh_query: Query<Entity, With<Handle<Mesh>>>,
+  children_query: Query<&Children>,
 )
 {
+  info!("Making spaceshipt pickable");
+  if unpickable_query.is_empty()
+  {
+    info!("Indeed, this stuff is empty!");
+  }
+
   for (entity, _children) in unpickable_query.iter_mut()
   {
     info!(" [MODELS] Setting Pickable on {:?}", entity);
-    set_pickible_recursive(&mut commands, &entity, &mesh_query, &children_query);
-    commands.entity(entity).remove::<UnpickableGLTF>();
+    let is_set = set_pickible_recursive(&mut commands, &entity, &mesh_query, &children_query);
+    if is_set
+    {
+      commands.entity(entity).remove::<NotYetPickable>();
+    }
   }
 }
 
 
 fn spawn_spaceship(mut commands: Commands, scene_assets: Res<SceneAssets>, mut images: ResMut<Assets<Image>>)
 {
-    let vision = create_spaceship_vision();
-    let handle = images.add(vision);
+  info!("Spaceships have loaded!");
+  let vision = create_spaceship_vision();
+  let handle = images.add(vision);
 
-    // TODO: use render target to read the camera viewed pixels
+  // TODO: use render target to read the camera viewed pixels
 //   let vision_image_clone = handle.clone();
-    let parent_id = commands.spawn((
-        MovingObjectBundle {
-            velocity: Velocity::new(Vec3::ZERO),
-            acceleration: Acceleration::new(Vec3::ZERO),
-            collider: Collider::new(SPACESHIP_RADIUS),
-            model: SceneBundle {
-                scene: scene_assets.spaceship.clone(),
-                transform: Transform::from_translation(STARTING_TRANSLATION),
-                ..default()
-            },
-        },
-        Spaceship,
-        UnpickableGLTF,
-        Vision { handle },
-        PickableBundle::default(),
-        Health::new(SPACESHIP_HEALTH),
-        CollisionDamage::new(SPACESHIP_COLLISION_DAMAGE),
-    )).id();
-
-
-    let camera_id = commands.spawn(Camera3dBundle {
-        camera_3d: Camera3d {
-            clear_color: ClearColorConfig::None,
-            ..default()
-        },
-        camera: Camera {
-          // render before the "main pass" camera
-          order: 2,
-//            target: RenderTarget::Image(vision_image_clone),
-          viewport: Some(Viewport {
-            physical_position: UVec2::new(0, 0),
-            physical_size: UVec2::new(256, 256),
-            ..default()
-          }),
-          ..default()
-        },
-        transform: Transform::from_translation(Vec3::new(0.0, 1.0, 8.0))
-            .looking_at(Vec3::new(0.0, 1.0, 30.), -Vec3::Y),
+  let parent_id = commands.spawn((
+    MovingObjectBundle {
+      velocity: Velocity::new(Vec3::ZERO),
+      acceleration: Acceleration::new(Vec3::ZERO),
+      collider: Collider::new(SPACESHIP_RADIUS),
+      model: SceneBundle
+      {
+        scene: scene_assets.spaceship.clone(),
+        transform: Transform::from_translation(STARTING_TRANSLATION),
         ..default()
-    }).id();
+      },
+    },
+    Spaceship,
+    NotYetPickable,
+    Vision { handle },
+    PickableBundle::default(),
+    Health::new(SPACESHIP_HEALTH),
+    CollisionDamage::new(SPACESHIP_COLLISION_DAMAGE),
+  )).id();
 
-    commands.entity(parent_id).push_children(&[camera_id]);
+
+  let camera_id = commands.spawn(Camera3dBundle {
+      camera_3d: Camera3d {
+          clear_color: ClearColorConfig::None,
+          ..default()
+      },
+      camera: Camera {
+        // render before the "main pass" camera
+        order: 2,
+//            target: RenderTarget::Image(vision_image_clone),
+        viewport: Some(Viewport {
+          physical_position: UVec2::new(0, 0),
+          physical_size: UVec2::new(256, 256),
+          ..default()
+        }),
+        ..default()
+      },
+      transform: Transform::from_translation(Vec3::new(0.0, 1.0, 8.0))
+          .looking_at(Vec3::new(0.0, 1.0, 30.), -Vec3::Y),
+      ..default()
+  }).id();
+
+  commands.entity(parent_id).push_children(&[camera_id]);
 }
 
 
@@ -269,42 +320,43 @@ fn spaceship_movement_controls(
     mut query: Query<(&mut Transform, &mut Velocity), With<Spaceship>>,
     keyboard_input: Res<Input<KeyCode>>,
     time: Res<Time>,
-) {
-    let Ok((mut transform, mut velocity)) = query.get_single_mut() else {
-        return;
-    };
-    let mut rotation = 0.0;
-    let mut roll = 0.0;
-    let mut movement = 0.0;
+)
+{
+  let Ok((mut transform, mut velocity)) = query.get_single_mut() else {
+      return;
+  };
+  let mut rotation = 0.0;
+  let mut roll = 0.0;
+  let mut movement = 0.0;
 
-    if keyboard_input.pressed(KeyCode::D) {
-        rotation = -SPACESHIP_ROTATION_SPEED * time.delta_seconds();
-    } else if keyboard_input.pressed(KeyCode::A) {
-        rotation = SPACESHIP_ROTATION_SPEED * time.delta_seconds();
-    }
+  if keyboard_input.pressed(KeyCode::D) {
+      rotation = -SPACESHIP_ROTATION_SPEED * time.delta_seconds();
+  } else if keyboard_input.pressed(KeyCode::A) {
+      rotation = SPACESHIP_ROTATION_SPEED * time.delta_seconds();
+  }
 
-    if keyboard_input.pressed(KeyCode::S) {
-        movement = -SPACESHIP_SPEED;
-    } else if keyboard_input.pressed(KeyCode::W) {
-        movement = SPACESHIP_SPEED;
-    }
+  if keyboard_input.pressed(KeyCode::S) {
+      movement = -SPACESHIP_SPEED;
+  } else if keyboard_input.pressed(KeyCode::W) {
+      movement = SPACESHIP_SPEED;
+  }
 
-    if keyboard_input.pressed(KeyCode::ShiftLeft) {
-        roll = -SPACESHIP_ROLL_SPEED * time.delta_seconds();
-    } else if keyboard_input.pressed(KeyCode::ControlLeft) {
-        roll = SPACESHIP_ROLL_SPEED * time.delta_seconds();
-    }
+  if keyboard_input.pressed(KeyCode::ShiftLeft) {
+      roll = -SPACESHIP_ROLL_SPEED * time.delta_seconds();
+  } else if keyboard_input.pressed(KeyCode::ControlLeft) {
+      roll = SPACESHIP_ROLL_SPEED * time.delta_seconds();
+  }
 
-    // Rotate around the Y-axis.
-    // Ignores the Z-axis rotation applied below.
-    transform.rotate_y(rotation);
+  // Rotate around the Y-axis.
+  // Ignores the Z-axis rotation applied below.
+  transform.rotate_y(rotation);
 
-    // Rotate around the local Z-axis.
-    // The rotation is relative to the current rotation!
-    transform.rotate_local_z(roll);
+  // Rotate around the local Z-axis.
+  // The rotation is relative to the current rotation!
+  transform.rotate_local_z(roll);
 
-    // Update the spaceship's velocity based on new direction.
-    velocity.value = -transform.forward() * movement;
+  // Update the spaceship's velocity based on new direction.
+  velocity.value = -transform.forward() * movement;
 }
 
 
