@@ -1,4 +1,3 @@
-use bevy::asset::LoadState;
 use bevy::core_pipeline::clear_color::ClearColorConfig;
 use bevy::{
     prelude::*,
@@ -60,10 +59,6 @@ pub struct Vision
 pub struct NotYetPickable;
 
 
-#[derive(Resource)]
-struct PickingAssigned(bool);
-
-
 pub struct SpaceshipPlugin;
 
 
@@ -72,7 +67,6 @@ impl Plugin for SpaceshipPlugin
   fn build(&self, app: &mut App)
   {
     app.add_systems(PostStartup, (spawn_spaceship,))
-      .add_systems(Startup, setup)
       .add_systems(OnEnter(GameState::GameOver), spawn_spaceship)
       .add_systems(
         Update,
@@ -80,28 +74,22 @@ impl Plugin for SpaceshipPlugin
           spaceship_movement_controls,
           spaceship_weapon_controls,
           spaceship_shield_controls,
-          draw_selected_vision,
-          process_picked_stuff,
+//          process_picked_stuff,
         )
         .chain()
         .in_set(InGameSet::UserInput),
       )
       .add_systems(Update, make_spaceship_pickable.run_if(need_pick_setup))
+      .add_systems(Update, draw_selected_vision)
       .add_systems(Update, spaceship_destroyed.in_set(InGameSet::EntityUpdates));
   }
 }
 
 
-fn setup(mut commands: Commands)
+fn process_picked_stuff(
+                        query_spaceship: Query<(Entity, &PickSelection), With<Spaceship>>)
 {
-  info!("Picking has not been assigned yet");
-  commands.insert_resource(PickingAssigned(false));
-}
-
-
-fn process_picked_stuff(query: Query<(Entity, &PickSelection)>)
-{
-  for (_, pick) in query.iter()
+  for (_, pick) in query_spaceship.iter()
   {
     if pick.is_selected
     {
@@ -115,6 +103,19 @@ fn draw_selected_vision(mut gizmos: Gizmos,
                         query_spaceship: Query<(Entity, &Children, &PickSelection), With<Spaceship>>,
                         query_proj: Query<(&PerspectiveProjection, &GlobalTransform)>)
 {
+  if query_spaceship.is_empty()
+  {
+//    info!("Oh, empty spaceships");
+  }
+
+//  for (_entity, pick) in query_spaceship.iter()
+//  {
+//    if pick.is_selected
+//    {
+//      info!("Selected");
+//    }
+//  }
+
   for (_spaceship, children, pick_selection) in query_spaceship.iter()
   {
     if pick_selection.is_selected
@@ -228,6 +229,40 @@ fn set_pickible_recursive(
 }
 
 
+fn make_spaceship_pickable(
+  mut commands: Commands,
+  mut unpickable_query: Query<(Entity, &Children), With<NotYetPickable>>,
+  spaceship_query: Query<Entity, With<Spaceship>>,
+  mesh_query: Query<Entity, With<Handle<Mesh>>>,
+  children_query: Query<&Children>,
+)
+{
+  info!("Making spaceship pickable");
+  if unpickable_query.is_empty()
+  {
+    info!("Indeed, this stuff is empty!");
+  }
+
+  let ship = spaceship_query.single();
+
+  for (entity, _children) in unpickable_query.iter_mut()
+  {
+    if commands.entity(ship).id() == commands.entity(entity).id()
+    {
+      info!("Ship and unpickable are the same thing");
+    }
+
+    info!(" [MODELS] Setting Pickable on {:?}", entity);
+    let is_set = set_pickible_recursive(&mut commands, &entity, &mesh_query, &children_query);
+    if is_set
+    {
+      info!("Setting is a success");
+      commands.entity(entity).remove::<NotYetPickable>();
+    }
+  }
+}
+
+
 fn need_pick_setup(scene_assets: Res<SceneAssets>,
                    asset_server: Res<AssetServer>,
                    unpickable_query: Query<(Entity, &Children), With<NotYetPickable>>,
@@ -236,30 +271,6 @@ fn need_pick_setup(scene_assets: Res<SceneAssets>,
   asset_server.is_loaded_with_dependencies(scene_assets.spaceship.id()) && !unpickable_query.is_empty()
 }
 
-
-fn make_spaceship_pickable(
-  mut commands: Commands,
-  mut unpickable_query: Query<(Entity, &Children), With<NotYetPickable>>,
-  mesh_query: Query<Entity, With<Handle<Mesh>>>,
-  children_query: Query<&Children>,
-)
-{
-  info!("Making spaceshipt pickable");
-  if unpickable_query.is_empty()
-  {
-    info!("Indeed, this stuff is empty!");
-  }
-
-  for (entity, _children) in unpickable_query.iter_mut()
-  {
-    info!(" [MODELS] Setting Pickable on {:?}", entity);
-    let is_set = set_pickible_recursive(&mut commands, &entity, &mesh_query, &children_query);
-    if is_set
-    {
-      commands.entity(entity).remove::<NotYetPickable>();
-    }
-  }
-}
 
 
 fn spawn_spaceship(mut commands: Commands, scene_assets: Res<SceneAssets>, mut images: ResMut<Assets<Image>>)
@@ -285,31 +296,30 @@ fn spawn_spaceship(mut commands: Commands, scene_assets: Res<SceneAssets>, mut i
     Spaceship,
     NotYetPickable,
     Vision { handle },
-    PickableBundle::default(),
     Health::new(SPACESHIP_HEALTH),
     CollisionDamage::new(SPACESHIP_COLLISION_DAMAGE),
   )).id();
 
 
   let camera_id = commands.spawn(Camera3dBundle {
-      camera_3d: Camera3d {
-          clear_color: ClearColorConfig::None,
-          ..default()
-      },
-      camera: Camera {
-        // render before the "main pass" camera
-        order: 2,
-//            target: RenderTarget::Image(vision_image_clone),
-        viewport: Some(Viewport {
-          physical_position: UVec2::new(0, 0),
-          physical_size: UVec2::new(256, 256),
-          ..default()
-        }),
-        ..default()
-      },
-      transform: Transform::from_translation(Vec3::new(0.0, 1.0, 8.0))
-          .looking_at(Vec3::new(0.0, 1.0, 30.), -Vec3::Y),
+    camera_3d: Camera3d {
+      clear_color: ClearColorConfig::None,
       ..default()
+    },
+    camera: Camera {
+      // render before the "main pass" camera
+      order: 2,
+//            target: RenderTarget::Image(vision_image_clone),
+      viewport: Some(Viewport {
+        physical_position: UVec2::new(0, 0),
+        physical_size: UVec2::new(256, 256),
+        ..default()
+      }),
+      ..default()
+    },
+    transform: Transform::from_translation(Vec3::new(0.0, 1.0, 8.0))
+        .looking_at(Vec3::new(0.0, 1.0, 30.), -Vec3::Y),
+    ..default()
   }).id();
 
   commands.entity(parent_id).push_children(&[camera_id]);
