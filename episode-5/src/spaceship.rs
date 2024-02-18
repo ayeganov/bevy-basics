@@ -272,8 +272,8 @@ fn spawn_spaceship(mut commands: Commands, scene_assets: Res<SceneAssets>, mut i
       }),
       ..default()
     },
-    transform: Transform::from_translation(Vec3::new(0.0, 1.0, 8.0))
-        .looking_at(Vec3::new(0.0, 1.0, 30.), -Vec3::Y),
+    transform: Transform::from_translation(Vec3::new(0.0, 1.0, -7.0))
+        .looking_at(Vec3::new(0.0, 1.0, -30.), Vec3::Y),
     projection: PerspectiveProjection {
       far: 500.0,
       ..default()
@@ -326,7 +326,7 @@ fn spaceship_movement_controls(
   transform.rotate_local_z(roll);
 
   // Update the spaceship's velocity based on new direction.
-  velocity.value = -transform.forward() * movement;
+  velocity.value = transform.forward() * movement;
 }
 
 
@@ -335,29 +335,33 @@ fn spaceship_weapon_controls(
     query: Query<&Transform, With<Spaceship>>,
     keyboard_input: Res<Input<KeyCode>>,
     scene_assets: Res<SceneAssets>,
-) {
-    let Ok(transform) = query.get_single() else {
-        return;
-    };
-    if keyboard_input.pressed(KeyCode::Space) {
-        commands.spawn((
-            MovingObjectBundle {
-                velocity: Velocity::new(-transform.forward() * MISSILE_SPEED),
-                acceleration: Acceleration::new(Vec3::ZERO),
-                collider: Collider::new(MISSILE_RADIUS),
-                model: SceneBundle {
-                    scene: scene_assets.missiles.clone(),
-                    transform: Transform::from_translation(
-                        transform.translation + -transform.forward() * MISSILE_FORWARD_SPAWN_SCALAR,
-                    ),
-                    ..default()
-                },
-            },
-            SpaceshipMissile,
-            Health::new(MISSILE_HEALTH),
-            CollisionDamage::new(MISSILE_COLLISION_DAMAGE),
-        ));
-    }
+)
+{
+  let Ok(transform) = query.get_single() else {
+    return;
+  };
+
+  if keyboard_input.pressed(KeyCode::Space)
+  {
+    commands.spawn((
+      MovingObjectBundle
+      {
+        velocity: Velocity::new(transform.forward() * MISSILE_SPEED),
+        acceleration: Acceleration::new(Vec3::ZERO),
+        collider: Collider::new(MISSILE_RADIUS),
+        model: SceneBundle {
+          scene: scene_assets.missiles.clone(),
+          transform: Transform::from_translation(
+            transform.translation + transform.forward() * MISSILE_FORWARD_SPAWN_SCALAR,
+          ),
+          ..default()
+        },
+      },
+      SpaceshipMissile,
+      Health::new(MISSILE_HEALTH),
+      CollisionDamage::new(MISSILE_COLLISION_DAMAGE),
+    ));
+  }
 }
 
 
@@ -403,7 +407,7 @@ impl From<ListenerInput<Pointer<Click>>> for SpaceshipSelected
 }
 
 
-fn handle_spaceship_selection(mut greetings: EventReader<SpaceshipSelected>,
+fn handle_spaceship_selection(mut selected: EventReader<SpaceshipSelected>,
                               transform_query: Query<&Transform>,
                               spaceship_query: Query<Entity, With<Spaceship>>)
 {
@@ -412,7 +416,7 @@ fn handle_spaceship_selection(mut greetings: EventReader<SpaceshipSelected>,
     info!("Spaceship: {:?}", spaceship);
   }
 
-  for event in greetings.read()
+  for event in selected.read()
   {
     info!(
         "Hello {:?}, you are {:?} depth units away from the pointer",
