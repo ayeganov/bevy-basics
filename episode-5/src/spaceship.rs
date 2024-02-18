@@ -1,12 +1,14 @@
 use bevy::core_pipeline::clear_color::ClearColorConfig;
 use bevy::{
     prelude::*,
+    math::vec4,
     render::{
         render_resource::{
             Extent3d, TextureDescriptor, TextureDimension, TextureFormat, TextureUsages,
         },
 //        camera::RenderTarget,
-        camera::Viewport
+        camera::Viewport,
+        camera::PerspectiveProjection
     },
 };
 
@@ -55,10 +57,6 @@ pub struct Vision
 }
 
 
-#[derive(Component)]
-pub struct NotYetPickable;
-
-
 pub struct SpaceshipPlugin;
 
 
@@ -74,16 +72,49 @@ impl Plugin for SpaceshipPlugin
           spaceship_movement_controls,
           spaceship_weapon_controls,
           spaceship_shield_controls,
-//          process_picked_stuff,
+          process_picked_stuff,
         )
         .chain()
         .in_set(InGameSet::UserInput),
       )
-      .add_systems(Update, make_spaceship_pickable.run_if(need_pick_setup))
+      .add_event::<SpaceshipSelected>()
+      .add_systems(Update, handle_spaceship_selection.run_if(on_event::<SpaceshipSelected>()))
       .add_systems(Update, draw_selected_vision)
+      .add_systems(Update, make_pickable)
       .add_systems(Update, spaceship_destroyed.in_set(InGameSet::EntityUpdates));
   }
 }
+
+
+/// Makes everything in the scene with a mesh pickable
+fn make_pickable(mut commands: Commands,
+                 meshes: Query<Entity, (With<Handle<Mesh>>, Without<Pickable>)>,
+)
+{
+  for entity in meshes.iter()
+  {
+    commands
+      .entity(entity)
+      .insert((PickableBundle::default(), HIGHLIGHT_TINT.clone()));
+  }
+}
+
+
+const HIGHLIGHT_TINT: Highlight<StandardMaterial> = Highlight {
+    hovered: Some(HighlightKind::new_dynamic(|matl| StandardMaterial {
+        base_color: matl.base_color + vec4(-0.5, -0.3, 0.9, 0.8), // hovered is blue
+        ..matl.to_owned()
+    })),
+    pressed: Some(HighlightKind::new_dynamic(|matl| StandardMaterial {
+        base_color: matl.base_color + vec4(-0.4, -0.4, 0.8, 0.8), // pressed is a different blue
+        ..matl.to_owned()
+    })),
+    selected: Some(HighlightKind::new_dynamic(|matl| StandardMaterial {
+        base_color: matl.base_color + vec4(-0.4, 0.8, -0.4, 0.0), // selected is green
+        ..matl.to_owned()
+    })),
+};
+
 
 
 fn process_picked_stuff(
@@ -100,70 +131,63 @@ fn process_picked_stuff(
 
 
 fn draw_selected_vision(mut gizmos: Gizmos,
-                        query_spaceship: Query<(Entity, &Children, &PickSelection), With<Spaceship>>,
-                        query_proj: Query<(&PerspectiveProjection, &GlobalTransform)>)
+                        query_spaceship: Query<(Entity, &Children), With<Spaceship>>,
+                        query_proj: Query<(&Projection, &GlobalTransform)>)
 {
-  if query_spaceship.is_empty()
+  for (_spaceship, children) in query_spaceship.iter()
   {
-//    info!("Oh, empty spaceships");
-  }
-
-//  for (_entity, pick) in query_spaceship.iter()
-//  {
-//    if pick.is_selected
-//    {
-//      info!("Selected");
-//    }
-//  }
-
-  for (_spaceship, children, pick_selection) in query_spaceship.iter()
-  {
-    if pick_selection.is_selected
+    if true
     {
-      info!("You got me buddy!");
       for &child in children.iter()
       {
         if let Ok((projection, &transform)) = query_proj.get(child)
         {
-          let half_fov = projection.fov / 2.0;
-          let tan_half_fov = half_fov.tan();
-          let near_height = 2.0 * tan_half_fov * projection.near;
-          let near_width = near_height * projection.aspect_ratio;
-          let far_height = 2.0 * tan_half_fov * projection.far;
-          let far_width = far_height * projection.aspect_ratio;
+          match projection
+          {
+            Projection::Perspective(proj) =>
+            {
+              let half_fov = proj.fov / 2.0;
+              let tan_half_fov = half_fov.tan();
+              let near_height = 2.0 * tan_half_fov * proj.near;
+              let near_width = near_height * proj.aspect_ratio;
+              let far_height = 2.0 * tan_half_fov * proj.far;
+              let far_width = far_height * proj.aspect_ratio;
 
-          // Near plane corners
-          let near_top_left = transform * Vec3::new(-near_width / 2.0, near_height / 2.0, -projection.near);
-          let near_top_right = transform * Vec3::new(near_width / 2.0, near_height / 2.0, -projection.near);
-          let near_bottom_left = transform * Vec3::new(-near_width / 2.0, -near_height / 2.0, -projection.near);
-          let near_bottom_right = transform * Vec3::new(near_width / 2.0, -near_height / 2.0, -projection.near);
+              // Near plane corners
+              let near_top_left = transform * Vec3::new(-near_width / 2.0, near_height / 2.0, -proj.near);
+              let near_top_right = transform * Vec3::new(near_width / 2.0, near_height / 2.0, -proj.near);
+              let near_bottom_left = transform * Vec3::new(-near_width / 2.0, -near_height / 2.0, -proj.near);
+              let near_bottom_right = transform * Vec3::new(near_width / 2.0, -near_height / 2.0, -proj.near);
 
-          // Far plane corners
-          let far_top_left = transform * Vec3::new(-far_width / 2.0, far_height / 2.0, -projection.far);
-          let far_top_right = transform * Vec3::new(far_width / 2.0, far_height / 2.0, -projection.far);
-          let far_bottom_left = transform * Vec3::new(-far_width / 2.0, -far_height / 2.0, -projection.far);
-          let far_bottom_right = transform * Vec3::new(far_width / 2.0, -far_height / 2.0, -projection.far);
+              // Far plane corners
+              let far_top_left = transform * Vec3::new(-far_width / 2.0, far_height / 2.0, -proj.far);
+              let far_top_right = transform * Vec3::new(far_width / 2.0, far_height / 2.0, -proj.far);
+              let far_bottom_left = transform * Vec3::new(-far_width / 2.0, -far_height / 2.0, -proj.far);
+              let far_bottom_right = transform * Vec3::new(far_width / 2.0, -far_height / 2.0, -proj.far);
 
-          // Draw lines between corners to form the frustum
-          let color = Color::rgba(0.0, 1.0, 0.0, 0.5); // Green, semi-transparent
+              // Draw lines between corners to form the frustum
+              let color = Color::rgba(0.0, 1.0, 0.0, 0.5); // Green, semi-transparent
 
-          // Near plane
-          gizmos.line(near_top_left, near_top_right, color);
-          gizmos.line(near_top_right, near_bottom_right, color);
-          gizmos.line(near_bottom_right, near_bottom_left, color);
-          gizmos.line(near_bottom_left, near_top_left, color);
+              // Near plane
+              gizmos.line(near_top_left, near_top_right, color);
+              gizmos.line(near_top_right, near_bottom_right, color);
+              gizmos.line(near_bottom_right, near_bottom_left, color);
+              gizmos.line(near_bottom_left, near_top_left, color);
 
-          // Far plane
-          gizmos.line(far_top_left, far_top_right, color);
-          gizmos.line(far_top_right, far_bottom_right, color);
-          gizmos.line(far_bottom_right, far_bottom_left, color);
-          gizmos.line(far_bottom_left, far_top_left, color);
+              // Far plane
+              gizmos.line(far_top_left, far_top_right, color);
+              gizmos.line(far_top_right, far_bottom_right, color);
+              gizmos.line(far_bottom_right, far_bottom_left, color);
+              gizmos.line(far_bottom_left, far_top_left, color);
 
-          // Edges between near and far planes
-          gizmos.line(near_top_left, far_top_left, color);
-          gizmos.line(near_top_right, far_top_right, color);
-          gizmos.line(near_bottom_left, far_bottom_left, color);
-          gizmos.line(near_bottom_right, far_bottom_right, color);
+              // Edges between near and far planes
+              gizmos.line(near_top_left, far_top_left, color);
+              gizmos.line(near_top_right, far_top_right, color);
+              gizmos.line(near_bottom_left, far_bottom_left, color);
+              gizmos.line(near_bottom_right, far_bottom_right, color);
+            },
+            _ => {}
+          }
         }
       }
     }
@@ -203,76 +227,6 @@ fn create_spaceship_vision() -> Image
 }
 
 
-fn set_pickible_recursive(
-  commands: &mut Commands,
-  entity: &Entity,
-  mesh_query: &Query<Entity, With<Handle<Mesh>>>,
-  children_query: &Query<&Children>,
-) -> bool
-{
-  let mut pickable_set = !mesh_query.is_empty();
-
-  for mesh_entity in mesh_query.iter()
-  {
-    commands.entity(mesh_entity).insert(PickableBundle::default());
-  }
-
-  if let Ok(children) = children_query.get(*entity)
-  {
-    for child in children.iter()
-    {
-      pickable_set |= set_pickible_recursive(commands, child, mesh_query, children_query);
-    }
-  }
-
-  pickable_set
-}
-
-
-fn make_spaceship_pickable(
-  mut commands: Commands,
-  mut unpickable_query: Query<(Entity, &Children), With<NotYetPickable>>,
-  spaceship_query: Query<Entity, With<Spaceship>>,
-  mesh_query: Query<Entity, With<Handle<Mesh>>>,
-  children_query: Query<&Children>,
-)
-{
-  info!("Making spaceship pickable");
-  if unpickable_query.is_empty()
-  {
-    info!("Indeed, this stuff is empty!");
-  }
-
-  let ship = spaceship_query.single();
-
-  for (entity, _children) in unpickable_query.iter_mut()
-  {
-    if commands.entity(ship).id() == commands.entity(entity).id()
-    {
-      info!("Ship and unpickable are the same thing");
-    }
-
-    info!(" [MODELS] Setting Pickable on {:?}", entity);
-    let is_set = set_pickible_recursive(&mut commands, &entity, &mesh_query, &children_query);
-    if is_set
-    {
-      info!("Setting is a success");
-      commands.entity(entity).remove::<NotYetPickable>();
-    }
-  }
-}
-
-
-fn need_pick_setup(scene_assets: Res<SceneAssets>,
-                   asset_server: Res<AssetServer>,
-                   unpickable_query: Query<(Entity, &Children), With<NotYetPickable>>,
-                   ) -> bool
-{
-  asset_server.is_loaded_with_dependencies(scene_assets.spaceship.id()) && !unpickable_query.is_empty()
-}
-
-
-
 fn spawn_spaceship(mut commands: Commands, scene_assets: Res<SceneAssets>, mut images: ResMut<Assets<Image>>)
 {
   info!("Spaceships have loaded!");
@@ -294,12 +248,13 @@ fn spawn_spaceship(mut commands: Commands, scene_assets: Res<SceneAssets>, mut i
       },
     },
     Spaceship,
-    NotYetPickable,
     Vision { handle },
     Health::new(SPACESHIP_HEALTH),
     CollisionDamage::new(SPACESHIP_COLLISION_DAMAGE),
+    On::<Pointer<Click>>::send_event::<SpaceshipSelected>(),
   )).id();
 
+  info!("Parent id: {:?}", parent_id);
 
   let camera_id = commands.spawn(Camera3dBundle {
     camera_3d: Camera3d {
@@ -319,9 +274,14 @@ fn spawn_spaceship(mut commands: Commands, scene_assets: Res<SceneAssets>, mut i
     },
     transform: Transform::from_translation(Vec3::new(0.0, 1.0, 8.0))
         .looking_at(Vec3::new(0.0, 1.0, 30.), -Vec3::Y),
+    projection: PerspectiveProjection {
+      far: 500.0,
+      ..default()
+    }.into(),
     ..default()
   }).id();
 
+  info!("Camera id: {:?}", camera_id);
   commands.entity(parent_id).push_children(&[camera_id]);
 }
 
@@ -400,25 +360,69 @@ fn spaceship_weapon_controls(
     }
 }
 
+
 fn spaceship_shield_controls(
     mut commands: Commands,
     query: Query<Entity, With<Spaceship>>,
     keyboard_input: Res<Input<KeyCode>>,
-) {
-    let Ok(spaceship) = query.get_single() else {
-        return;
-    };
-    if keyboard_input.pressed(KeyCode::Tab) {
-        commands.entity(spaceship).insert(SpaceshipShield);
-    }
+)
+{
+  let Ok(spaceship) = query.get_single() else
+  {
+    return;
+  };
+
+  if keyboard_input.pressed(KeyCode::Tab)
+  {
+    commands.entity(spaceship).insert(SpaceshipShield);
+  }
 }
+
 
 fn spaceship_destroyed(
     mut next_state: ResMut<NextState<GameState>>,
     query: Query<(), With<Spaceship>>,
 )
 {
-  if query.get_single().is_err() {
+  if query.get_single().is_err()
+  {
     next_state.set(GameState::GameOver);
   };
 }
+
+
+#[derive(Event)]
+struct SpaceshipSelected(Entity, f32);
+
+impl From<ListenerInput<Pointer<Click>>> for SpaceshipSelected
+{
+  fn from(event: ListenerInput<Pointer<Click>>) -> Self
+  {
+    SpaceshipSelected(event.listener(), event.hit.depth)
+  }
+}
+
+
+fn handle_spaceship_selection(mut greetings: EventReader<SpaceshipSelected>,
+                              transform_query: Query<&Transform>,
+                              spaceship_query: Query<Entity, With<Spaceship>>)
+{
+  for spaceship in spaceship_query.iter()
+  {
+    info!("Spaceship: {:?}", spaceship);
+  }
+
+  for event in greetings.read()
+  {
+    info!(
+        "Hello {:?}, you are {:?} depth units away from the pointer",
+        event.0, event.1
+    );
+
+    if let Ok(transform) = transform_query.get(event.0)
+    {
+      info!("Location: {}", transform.translation);
+    }
+  }
+}
+

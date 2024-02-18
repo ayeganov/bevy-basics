@@ -23,6 +23,8 @@ use schedule::SchedulePlugin;
 use spaceship::SpaceshipPlugin;
 use state::StatePlugin;
 use bevy_mod_picking::prelude::*;
+use bevy_editor_pls::prelude::*;
+
 
 fn main() {
     App::new()
@@ -44,6 +46,7 @@ fn main() {
         .add_plugins(SchedulePlugin)
         .add_plugins(StatePlugin)
         .add_plugins(DefaultPickingPlugins)
+        .add_plugins(EditorPlugin::default())
         // .add_plugins(DebugPlugin)
         .run();
 }
