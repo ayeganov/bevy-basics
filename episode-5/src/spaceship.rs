@@ -40,7 +40,7 @@ const MISSILE_RADIUS: f32 = 0.3;
 const MISSILE_HEALTH: f32 = 1.0;
 const MISSILE_COLLISION_DAMAGE: f32 = 5.0;
 const MISSILE_SCALE: Vec3 = Vec3::splat(0.3);
-const NUM_SPACESHIPS: u16 = 2;
+const NUM_SPACESHIPS: u16 = 1;
 
 
 #[derive(Component, Debug)]
@@ -329,12 +329,10 @@ fn spawn_spaceship(commands: &mut Commands,
         ..default()
       },
     },
-    PickableBundle::default(),
     VisionObjectBundle::default(),
     Spaceship,
     Health::new(SPACESHIP_HEALTH),
     CollisionDamage::new(SPACESHIP_COLLISION_DAMAGE),
-    On::<Pointer<Click>>::send_event::<SpaceshipSelected>(),
   ));
 }
 

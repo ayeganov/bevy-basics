@@ -17,6 +17,8 @@ use crate::schedule::InGameSet;
 #[derive(Component, Debug)]
 pub struct Vision
 {
+  pub id: isize,
+  pub cam_id: Entity
 //  pub visual_sensor: Handle<Image>,
 }
 
@@ -29,6 +31,7 @@ pub struct VisionSensing;
 pub struct VisionObjectBundle
 {
   pub vision: Vision,
+  pub click_event: On::<Pointer<Click>>
 }
 
 
@@ -38,9 +41,19 @@ impl Default for VisionObjectBundle
   {
     Self
     {
-      vision: Vision { }
+      vision: Vision { },
+      click_event: On::<Pointer<Click>>::send_event::<VisionSelected>(),
     }
   }
+}
+
+
+impl VisionObjectBundle
+{
+  pub fn new(id: isize)
+  {
+    let mut default = VisionObjectBundle::default();
+    default.vision.id = id;
 }
 
 
@@ -53,7 +66,7 @@ impl Plugin for VisionPlugin
   {
     app.add_systems(
       Update,
-      (make_pickable, )
+      (make_pickable, draw_selected_vision)
         .chain()
         .in_set(InGameSet::EntityUpdates),
     )
@@ -181,7 +194,7 @@ fn detach_vision_camera(selected_vision: Entity,
                         commands: &mut Commands,
 )
 {
-  commands.entity(selected_vision).remove::<Camera3dBundle>();
+  commands.entity(selected_vision).despawn_recursive();
 }
 
 
@@ -195,15 +208,15 @@ fn unselect_vision(selected_vision: Entity,
 
 fn handle_vision_selection(mut selected: EventReader<VisionSelected>,
                            vision_query: Query<Entity, With<Vision>>,
-                           already_selected_query: Query<Entity, (With<Vision>, With<PickSelection>)>,
+                           already_selected_query: Query<(Entity, &Vision), (With<Vision>, With<PickSelection>)>,
                            mut commands: Commands,
 )
 {
   info!("You clicked!");
   if !already_selected_query.is_empty()
   {
-    let selected_vision = already_selected_query.single();
-    detach_vision_camera(selected_vision, &mut commands);
+    let (selected_vision, vision) = already_selected_query.single();
+    detach_vision_camera(vision.cam_id, &mut commands);
     unselect_vision(selected_vision, &mut commands);
   }
 
@@ -218,6 +231,7 @@ fn handle_vision_selection(mut selected: EventReader<VisionSelected>,
         commands.entity(vision_id).insert(PickSelection {
           is_selected: true
         });
+
         attach_vision_camera(&mut commands, vision_id);
       }
     }
@@ -226,82 +240,14 @@ fn handle_vision_selection(mut selected: EventReader<VisionSelected>,
 
 
 fn draw_selected_vision(mut gizmos: Gizmos,
-                        query_spaceship: Query<(Entity, &Children, &PickSelection), (With<Vision>, With<PickSelection>)>,
+                        query_vision: Query<(Entity, &Children, &PickSelection), (With<Vision>, With<PickSelection>)>,
                         pickables_query: Query<(Entity, &PickSelection), With<PickSelection>>,
                         query_proj: Query<(&Projection, &GlobalTransform)>)
 {
-//  for (pick_id, pick_selection) in pickables_query.iter()
-//  {
-//    if pick_selection.is_selected
-//    {
-//      info!("Selected pick id: {:?}", pick_id);
-//  for (_spaceship, children) in query_spaceship.iter()
-//  {
-//    info!("Spaceship id: {:?}", _spaceship);
-//    if true
-//    {
-//      for &child in children.iter()
-//      {
-//        if let Ok((projection, &transform)) = query_proj.get(child)
-//        {
-//          match projection
-//          {
-//            Projection::Perspective(proj) =>
-//            {
-//              let half_fov = proj.fov / 2.0;
-//              let tan_half_fov = half_fov.tan();
-//              let near_height = 2.0 * tan_half_fov * proj.near;
-//              let near_width = near_height * proj.aspect_ratio;
-//              let far_height = 2.0 * tan_half_fov * proj.far;
-//              let far_width = far_height * proj.aspect_ratio;
-//
-//              // Near plane corners
-//              let near_top_left = transform * Vec3::new(-near_width / 2.0, near_height / 2.0, -proj.near);
-//              let near_top_right = transform * Vec3::new(near_width / 2.0, near_height / 2.0, -proj.near);
-//              let near_bottom_left = transform * Vec3::new(-near_width / 2.0, -near_height / 2.0, -proj.near);
-//              let near_bottom_right = transform * Vec3::new(near_width / 2.0, -near_height / 2.0, -proj.near);
-//
-//              // Far plane corners
-//              let far_top_left = transform * Vec3::new(-far_width / 2.0, far_height / 2.0, -proj.far);
-//              let far_top_right = transform * Vec3::new(far_width / 2.0, far_height / 2.0, -proj.far);
-//              let far_bottom_left = transform * Vec3::new(-far_width / 2.0, -far_height / 2.0, -proj.far);
-//              let far_bottom_right = transform * Vec3::new(far_width / 2.0, -far_height / 2.0, -proj.far);
-//
-//              // Draw lines between corners to form the frustum
-//              let color = Color::rgba(0.0, 1.0, 0.0, 0.5); // Green, semi-transparent
-//
-//              // Near plane
-//              gizmos.line(near_top_left, near_top_right, color);
-//              gizmos.line(near_top_right, near_bottom_right, color);
-//              gizmos.line(near_bottom_right, near_bottom_left, color);
-//              gizmos.line(near_bottom_left, near_top_left, color);
-//
-//              // Far plane
-//              gizmos.line(far_top_left, far_top_right, color);
-//              gizmos.line(far_top_right, far_bottom_right, color);
-//              gizmos.line(far_bottom_right, far_bottom_left, color);
-//              gizmos.line(far_bottom_left, far_top_left, color);
-//
-//              // Edges between near and far planes
-//              gizmos.line(near_top_left, far_top_left, color);
-//              gizmos.line(near_top_right, far_top_right, color);
-//              gizmos.line(near_bottom_left, far_bottom_left, color);
-//              gizmos.line(near_bottom_right, far_bottom_right, color);
-//            },
-//            _ => {}
-//          }
-//        }
-//      }
-//    }
-//  }
-//    }
-//  }
-
-  for (_spaceship, children, pick) in query_spaceship.iter()
+  for (_vision, children, pick) in query_vision.iter()
   {
     if pick.is_selected
     {
-      info!("Spaceship id: {:?}", _spaceship);
       for &child in children.iter()
       {
         if let Ok((projection, &transform)) = query_proj.get(child)
