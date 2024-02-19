@@ -18,7 +18,7 @@ const VELOCITY_SCALAR: f32 = 5.0;
 const ACCELERATION_SCALAR: f32 = 1.0;
 const SPAWN_TIME_SECONDS: f32 = 1.0;
 const ROTATE_SPEED: f32 = 2.5;
-const RADIUS: f32 = 2.5;
+const RADIUS: f32 = 2.0;
 const HEALTH: f32 = 80.0;
 const COLLISION_DAMAGE: f32 = 35.0;
 
