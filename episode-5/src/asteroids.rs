@@ -16,8 +16,6 @@ use crate::{
 
 const VELOCITY_SCALAR: f32 = 5.0;
 const ACCELERATION_SCALAR: f32 = 1.0;
-const SPAWN_RANGE_X: Range<f32> = -25.0..25.0;
-const SPAWN_RANGE_Z: Range<f32> = 0.0..25.0;
 const SPAWN_TIME_SECONDS: f32 = 1.0;
 const ROTATE_SPEED: f32 = 2.5;
 const RADIUS: f32 = 2.5;
@@ -53,7 +51,7 @@ impl Plugin for AsteroidPlugin
 fn calculate_spawn_ranges(
     window_query: Query<&Window>,
     camera_query: Query<&Projection, With<MainCamera>>,
-) -> (Vec2, Vec2)
+) -> (Range<f32>, Range<f32>)
 {
   // Attempt to get the primary window and camera components
   let window = window_query.single();
@@ -68,18 +66,38 @@ fn calculate_spawn_ranges(
       let visible_width = visible_height * aspect_ratio;
 
       // Calculate spawn ranges based on the visible area
-      let spawn_range_x = (-visible_width / 2.0, visible_width / 2.0);
-      let spawn_range_z = (-visible_height / 2.0, visible_height / 2.0);
+      let spawn_range_x: Range<f32> = (-visible_width / 2.0) .. (visible_width / 2.0);
+      let spawn_range_z: Range<f32> = (-visible_height / 2.0) .. (visible_height / 2.0);
 
       return (
-        Vec2::new(spawn_range_x.0, spawn_range_x.1),
-        Vec2::new(spawn_range_z.0, spawn_range_z.1)
+        spawn_range_x,
+        spawn_range_z
       );
     }
   }
 
   // Default or error case
-  (Vec2::ZERO, Vec2::ZERO)
+  (0.0..0.0, 0.0..0.0)
+}
+
+
+fn make_velocity_toward_screen(x_range: &Range<f32>,
+                               z_range: &Range<f32>,
+                               translation: Vec3) -> Vec3
+{
+  let screen_center = Vec3::new(
+    (x_range.start + x_range.end) / 2.0,
+    0.0,
+    (z_range.start + z_range.end) / 2.0,
+  );
+
+  // Modify the velocity vector calculation
+  let direction_to_center = (screen_center - translation).normalize_or_zero();
+
+  // Ensure the asteroids are always flying towards the center or across the screen
+  let velocity = direction_to_center * VELOCITY_SCALAR;
+
+  velocity
 }
 
 
@@ -98,32 +116,34 @@ fn spawn_asteroid(
   }
 
   let (x_range, z_range) = calculate_spawn_ranges(window_query, camera_query);
-  info!("x range: {}, z range: {}", x_range, z_range);
+  info!("x range: {:?}, z range: {:?}", x_range, z_range);
 
   let mut rng = rand::thread_rng();
 
   let spawn_edge = rng.gen_bool(0.5); // true for X edge, false for Z edge
 
-  let translation = if spawn_edge {
-      // Spawn on the X edge
-      Vec3::new(
-          if rng.gen_bool(0.5) { x_range.x } else { x_range.y },
-          0.0, // Assuming asteroids move in the XZ plane, Y is set to 0 or another appropriate value
-          rng.gen_range(z_range.x..=z_range.y),
-      )
-  } else {
-      // Spawn on the Z edge
-      Vec3::new(
-          rng.gen_range(x_range.x..=x_range.y),
-          0.0, // Assuming asteroids move in the XZ plane, Y is set to 0 or another appropriate value
-          if rng.gen_bool(0.5) { z_range.x } else { z_range.y },
-      )
+  let translation = if spawn_edge
+  {
+    Vec3::new(
+      if rng.gen_bool(0.5) { x_range.start } else { x_range.end },
+      0.0, // Assuming asteroids move in the XZ plane, Y is set to 0 or another appropriate value
+      rng.gen_range(z_range.start..=z_range.end),
+    )
+  }
+  else
+  {
+    // Spawn on the Z edge
+    Vec3::new(
+      rng.gen_range(x_range.start..=x_range.end),
+      0.0, // Assuming asteroids move in the XZ plane, Y is set to 0 or another appropriate value
+      if rng.gen_bool(0.5) { z_range.start } else { z_range.end },
+    )
   };
 
 
   let mut random_unit_vector =
       || Vec3::new(rng.gen_range(-1.0..1.0), 0., rng.gen_range(-1.0..1.0)).normalize_or_zero();
-  let velocity = random_unit_vector() * VELOCITY_SCALAR;
+  let velocity = make_velocity_toward_screen(&x_range, &z_range, translation);
   let acceleration = random_unit_vector() * ACCELERATION_SCALAR;
 
   commands.spawn((
