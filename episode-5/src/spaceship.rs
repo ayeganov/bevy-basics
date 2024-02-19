@@ -33,7 +33,7 @@ const SPACESHIP_ROLL_SPEED: f32 = 2.5;
 const SPACESHIP_HEALTH: f32 = 100.0;
 const SPACESHIP_COLLISION_DAMAGE: f32 = 100.0;
 const MISSILE_SPEED: f32 = 50.0;
-const MISSILE_FORWARD_SPAWN_SCALAR: f32 = 7.5;
+const MISSILE_FORWARD_SPAWN_SCALAR: f32 = 6.5;
 const MISSILE_RADIUS: f32 = 1.0;
 const MISSILE_HEALTH: f32 = 1.0;
 const MISSILE_COLLISION_DAMAGE: f32 = 5.0;
@@ -235,7 +235,7 @@ fn spawn_spaceship(mut commands: Commands, scene_assets: Res<SceneAssets>, mut i
 
   // TODO: use render target to read the camera viewed pixels
 //   let vision_image_clone = handle.clone();
-  let parent_id = commands.spawn((
+  let spaceship_id = commands.spawn((
     MovingObjectBundle {
       velocity: Velocity::new(Vec3::ZERO),
       acceleration: Acceleration::new(Vec3::ZERO),
@@ -243,7 +243,8 @@ fn spawn_spaceship(mut commands: Commands, scene_assets: Res<SceneAssets>, mut i
       model: SceneBundle
       {
         scene: scene_assets.spaceship.clone(),
-        transform: Transform::from_translation(STARTING_TRANSLATION),
+        transform: Transform::from_translation(STARTING_TRANSLATION)
+                             .with_scale(Vec3::splat(0.5)),
         ..default()
       },
     },
@@ -254,7 +255,7 @@ fn spawn_spaceship(mut commands: Commands, scene_assets: Res<SceneAssets>, mut i
     On::<Pointer<Click>>::send_event::<SpaceshipSelected>(),
   )).id();
 
-  info!("Parent id: {:?}", parent_id);
+  info!("Parent id: {:?}", spaceship_id);
 
   let camera_id = commands.spawn(Camera3dBundle {
     camera_3d: Camera3d {
@@ -272,8 +273,8 @@ fn spawn_spaceship(mut commands: Commands, scene_assets: Res<SceneAssets>, mut i
       }),
       ..default()
     },
-    transform: Transform::from_translation(Vec3::new(0.0, 1.0, -7.0))
-        .looking_at(Vec3::new(0.0, 1.0, -30.), Vec3::Y),
+    transform: Transform::from_translation(Vec3::new(0.0, -1.0, -7.0))
+        .looking_at(Vec3::new(0.0, -1.0, -30.), Vec3::Y),
     projection: PerspectiveProjection {
       far: 500.0,
       ..default()
@@ -282,7 +283,7 @@ fn spawn_spaceship(mut commands: Commands, scene_assets: Res<SceneAssets>, mut i
   }).id();
 
   info!("Camera id: {:?}", camera_id);
-  commands.entity(parent_id).push_children(&[camera_id]);
+  commands.entity(spaceship_id).push_children(&[camera_id]);
 }
 
 

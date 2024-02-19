@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 
-const CAMERA_DISTANCE: f32 = 80.0;
+pub const CAMERA_DISTANCE: f32 = 80.0;
 
 #[derive(Component, Debug)]
 pub struct MainCamera;
