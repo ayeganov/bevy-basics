@@ -18,7 +18,7 @@ use crate::schedule::InGameSet;
 pub struct Vision
 {
   pub id: isize,
-  pub cam_id: Entity
+  pub cam_id: Option<Entity>
 //  pub visual_sensor: Handle<Image>,
 }
 
@@ -41,7 +41,7 @@ impl Default for VisionObjectBundle
   {
     Self
     {
-      vision: Vision { },
+      vision: Vision { id: 1, cam_id: None },
       click_event: On::<Pointer<Click>>::send_event::<VisionSelected>(),
     }
   }
@@ -50,10 +50,12 @@ impl Default for VisionObjectBundle
 
 impl VisionObjectBundle
 {
-  pub fn new(id: isize)
+  pub fn new(id: isize) -> Self
   {
     let mut default = VisionObjectBundle::default();
     default.vision.id = id;
+    default
+  }
 }
 
 
@@ -154,7 +156,8 @@ const HIGHLIGHT_TINT: Highlight<StandardMaterial> = Highlight
 
 
 fn attach_vision_camera(commands: &mut Commands,
-                        vision_id: Entity)
+                        vision_id: Entity,
+                        cam_order: isize) -> Entity
 {
   let camera_id = commands.spawn((Camera3dBundle
   {
@@ -166,7 +169,7 @@ fn attach_vision_camera(commands: &mut Commands,
     camera: Camera
     {
       // render before the "main pass" camera
-      order: 1,
+      order: cam_order,
 //      target: RenderTarget::Image(vision_image_clone),
       viewport: Some(Viewport {
         physical_position: UVec2::new(0, 0),
@@ -187,14 +190,19 @@ fn attach_vision_camera(commands: &mut Commands,
   )).id();
 
   commands.entity(vision_id).push_children(&[camera_id]);
+
+  camera_id
 }
 
 
-fn detach_vision_camera(selected_vision: Entity,
+fn detach_vision_camera(selected_cam: Option<Entity>,
                         commands: &mut Commands,
 )
 {
-  commands.entity(selected_vision).despawn_recursive();
+  if let Some(cam_id) = selected_cam
+  {
+    commands.entity(cam_id).despawn_recursive();
+  }
 }
 
 
@@ -207,22 +215,29 @@ fn unselect_vision(selected_vision: Entity,
 
 
 fn handle_vision_selection(mut selected: EventReader<VisionSelected>,
-                           vision_query: Query<Entity, With<Vision>>,
-                           already_selected_query: Query<(Entity, &Vision), (With<Vision>, With<PickSelection>)>,
+                           mut params: ParamSet<(
+                               Query<(Entity, &mut Vision), With<Vision>>,
+                               Query<(Entity, &Vision), (With<Vision>, With<PickSelection>)>
+                           )>,
                            mut commands: Commands,
 )
 {
   info!("You clicked!");
-  if !already_selected_query.is_empty()
   {
-    let (selected_vision, vision) = already_selected_query.single();
-    detach_vision_camera(vision.cam_id, &mut commands);
-    unselect_vision(selected_vision, &mut commands);
+    let already_selected_query = params.p1();
+
+    if !already_selected_query.is_empty()
+    {
+      let (selected_vision, vision) = already_selected_query.single();
+      detach_vision_camera(vision.cam_id, &mut commands);
+      unselect_vision(selected_vision, &mut commands);
+    }
   }
 
   for VisionSelected(selected_vision_id) in selected.read()
   {
-    for vision_id in vision_query.iter()
+    let mut vision_query = params.p0();
+    for (vision_id, mut vision) in vision_query.iter_mut()
     {
       if vision_id == *selected_vision_id
       {
@@ -232,7 +247,8 @@ fn handle_vision_selection(mut selected: EventReader<VisionSelected>,
           is_selected: true
         });
 
-        attach_vision_camera(&mut commands, vision_id);
+        vision.cam_id = Some(attach_vision_camera(&mut commands, vision_id, vision.id));
+        break;
       }
     }
   }
@@ -241,7 +257,6 @@ fn handle_vision_selection(mut selected: EventReader<VisionSelected>,
 
 fn draw_selected_vision(mut gizmos: Gizmos,
                         query_vision: Query<(Entity, &Children, &PickSelection), (With<Vision>, With<PickSelection>)>,
-                        pickables_query: Query<(Entity, &PickSelection), With<PickSelection>>,
                         query_proj: Query<(&Projection, &GlobalTransform)>)
 {
   for (_vision, children, pick) in query_vision.iter()
