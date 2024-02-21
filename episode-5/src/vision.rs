@@ -6,6 +6,7 @@ use bevy::{
     render_resource::{
       Extent3d, TextureDescriptor, TextureDimension, TextureFormat, TextureUsages,
     },
+    camera::RenderTarget,
     camera::Viewport
   }
 };
@@ -14,18 +15,22 @@ use bevy_mod_picking::prelude::*;
 
 use crate::schedule::InGameSet;
 
-#[derive(Component, Debug)]
+#[derive(Component, Debug, Default)]
 pub struct Vision
 {
   pub id: isize,
-  pub cam_id: Option<Entity>
-//  pub visual_sensor: Handle<Image>,
+  pub cam_id: Option<Entity>,
+  pub selected_cam_id: Option<Entity>,
+  pub visual_sensor: Handle<Image>,
 }
 
 
 #[derive(Component, Debug)]
 pub struct VisionSensing;
 
+
+#[derive(Component, Debug)]
+pub struct VisionCam;
 
 #[derive(Bundle)]
 pub struct VisionObjectBundle
@@ -41,7 +46,7 @@ impl Default for VisionObjectBundle
   {
     Self
     {
-      vision: Vision { id: 1, cam_id: None },
+      vision: Vision { id: 1, ..default() },
       click_event: On::<Pointer<Click>>::send_event::<VisionSelected>(),
     }
   }
@@ -68,7 +73,7 @@ impl Plugin for VisionPlugin
   {
     app.add_systems(
       Update,
-      (make_pickable, draw_selected_vision)
+      (make_pickable, draw_selected_vision, add_vision)
         .chain()
         .in_set(InGameSet::EntityUpdates),
     )
@@ -86,6 +91,54 @@ impl From<ListenerInput<Pointer<Click>>> for VisionSelected
   fn from(event: ListenerInput<Pointer<Click>>) -> Self
   {
     VisionSelected(event.listener())
+  }
+}
+
+
+fn add_vision(mut images: ResMut<Assets<Image>>,
+              mut visions: Query<(Entity, &mut Vision), (With<Vision>, Without<VisionSensing>)>,
+              mut commands: Commands,
+)
+{
+  if !visions.is_empty()
+  {
+    info!("I got visions");
+  }
+
+  for (vision_id, mut vision) in visions.iter_mut()
+  {
+    info!("Adding vision to id: {}", vision.id);
+    vision.visual_sensor = images.add(create_vision_sensor());
+    let camera_id = commands.spawn((Camera3dBundle
+    {
+      camera_3d: Camera3d
+      {
+        clear_color: ClearColorConfig::None,
+        ..default()
+      },
+      camera: Camera
+      {
+        // render before the "main pass" camera
+        order: 1,
+        target: RenderTarget::Image(vision.visual_sensor.clone()),
+        ..default()
+      },
+      transform: Transform::from_translation(Vec3::new(0.0, -1.0, -7.0))
+          .looking_at(Vec3::new(0.0, -1.0, -30.), Vec3::Y),
+      projection: PerspectiveProjection
+      {
+        far: 500.0,
+        ..default()
+      }.into(),
+      ..default()
+    },
+    )).id();
+
+    vision.cam_id = Some(camera_id);
+
+    commands.entity(camera_id).insert(VisionCam{});
+    commands.entity(vision_id).push_children(&[camera_id]);
+    commands.entity(vision_id).insert(VisionSensing{});
   }
 }
 
@@ -157,7 +210,7 @@ const HIGHLIGHT_TINT: Highlight<StandardMaterial> = Highlight
 
 fn attach_vision_camera(commands: &mut Commands,
                         vision_id: Entity,
-                        cam_order: isize) -> Entity
+                        vision: &Vision) -> Entity
 {
   let camera_id = commands.spawn((Camera3dBundle
   {
@@ -169,8 +222,8 @@ fn attach_vision_camera(commands: &mut Commands,
     camera: Camera
     {
       // render before the "main pass" camera
-      order: cam_order,
-//      target: RenderTarget::Image(vision_image_clone),
+      order: vision.id,
+//      target: RenderTarget::Image(vision.visual_sensor.clone()),
       viewport: Some(Viewport {
         physical_position: UVec2::new(0, 0),
         physical_size: UVec2::new(256, 256),
@@ -229,7 +282,7 @@ fn handle_vision_selection(mut selected: EventReader<VisionSelected>,
     if !already_selected_query.is_empty()
     {
       let (selected_vision, vision) = already_selected_query.single();
-      detach_vision_camera(vision.cam_id, &mut commands);
+      detach_vision_camera(vision.selected_cam_id, &mut commands);
       unselect_vision(selected_vision, &mut commands);
     }
   }
@@ -247,7 +300,7 @@ fn handle_vision_selection(mut selected: EventReader<VisionSelected>,
           is_selected: true
         });
 
-        vision.cam_id = Some(attach_vision_camera(&mut commands, vision_id, vision.id));
+        vision.selected_cam_id = Some(attach_vision_camera(&mut commands, vision_id, &vision));
         break;
       }
     }
@@ -257,13 +310,13 @@ fn handle_vision_selection(mut selected: EventReader<VisionSelected>,
 
 fn draw_selected_vision(mut gizmos: Gizmos,
                         query_vision: Query<(Entity, &Children, &PickSelection), (With<Vision>, With<PickSelection>)>,
-                        query_proj: Query<(&Projection, &GlobalTransform)>)
+                        query_proj: Query<(&Projection, &GlobalTransform), Without<VisionCam>>)
 {
   for (_vision, children, pick) in query_vision.iter()
   {
     if pick.is_selected
     {
-      for &child in children.iter()
+      for (idx, &child) in children.iter().enumerate()
       {
         if let Ok((projection, &transform)) = query_proj.get(child)
         {
