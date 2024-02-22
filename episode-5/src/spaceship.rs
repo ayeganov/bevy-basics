@@ -6,6 +6,7 @@ use rand::prelude::*;
 use crate::{
   asset_loader::SceneAssets,
   collision_detection::{Collider, CollisionDamage},
+  camera::VisibleRange,
   health::Health,
   movement::{Acceleration, MovingObjectBundle, Velocity},
   vision::VisionObjectBundle,
@@ -66,21 +67,26 @@ impl Plugin for SpaceshipPlugin
 }
 
 
-fn spawn_spaceships(mut commands: Commands, scene_assets: Res<SceneAssets>,
+fn spawn_spaceships(mut commands: Commands,
+                    scene_assets: Res<SceneAssets>,
+                    visible_range_query: Query<&VisibleRange>,
 )
 {
-  let mut rng = rand::thread_rng();
-
-  let id_offset = 2;
-  for spaceship_num in 0..NUM_SPACESHIPS
+  if let Ok(visible_range) = visible_range_query.get_single()
   {
-    let location = Vec3::new(
-      rng.gen_range(-18.0..=18.0),
-      0.0, // Assuming asteroids move in the XZ plane, Y is set to 0 or another appropriate value
-      rng.gen_range(-30.0..=30.0),
-    );
+    let mut rng = rand::thread_rng();
 
-    spawn_spaceship(&mut commands, &scene_assets, location, spaceship_num + id_offset);
+    let id_offset = 2;
+    for spaceship_num in 0..NUM_SPACESHIPS
+    {
+      let location = Vec3::new(
+        rng.gen_range(visible_range.x_range.clone()),
+        0.0, // Assuming asteroids move in the XZ plane, Y is set to 0 or another appropriate value
+        rng.gen_range(visible_range.z_range.clone()),
+      );
+
+      spawn_spaceship(&mut commands, &scene_assets, location, spaceship_num + id_offset);
+    }
   }
 }
 

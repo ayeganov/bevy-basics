@@ -3,15 +3,13 @@ use std::ops::Range;
 use bevy::prelude::*;
 use rand::prelude::*;
 
-use bevy::window::Window;
-
 use crate::{
     asset_loader::SceneAssets,
     collision_detection::{Collider, CollisionDamage},
     health::Health,
     movement::{Acceleration, MovingObjectBundle, Velocity},
     schedule::InGameSet,
-    camera::{MainCamera, CAMERA_DISTANCE}
+    camera::VisibleRange
 };
 
 const VELOCITY_SCALAR: f32 = 5.0;
@@ -48,39 +46,6 @@ impl Plugin for AsteroidPlugin
 }
 
 
-fn calculate_spawn_ranges(
-    window_query: Query<&Window>,
-    camera_query: Query<&Projection, With<MainCamera>>,
-) -> (Range<f32>, Range<f32>)
-{
-  // Attempt to get the primary window and camera components
-  let window = window_query.single();
-  let aspect_ratio = window.width() as f32 / window.height() as f32;
-
-  if let Ok(projection) = camera_query.get_single()
-  {
-    if let Projection::Perspective(perspective_projection) = projection
-    {
-      let fov = perspective_projection.fov;
-      let visible_height = 2.0 * (CAMERA_DISTANCE * (fov / 2.0).tan());
-      let visible_width = visible_height * aspect_ratio;
-
-      // Calculate spawn ranges based on the visible area
-      let spawn_range_x: Range<f32> = (-visible_width / 2.0) .. (visible_width / 2.0);
-      let spawn_range_z: Range<f32> = (-visible_height / 2.0) .. (visible_height / 2.0);
-
-      return (
-        spawn_range_x,
-        spawn_range_z
-      );
-    }
-  }
-
-  // Default or error case
-  (0.0..0.0, 0.0..0.0)
-}
-
-
 fn make_velocity_toward_screen(x_range: &Range<f32>,
                                z_range: &Range<f32>,
                                translation: Vec3) -> Vec3
@@ -106,8 +71,7 @@ fn spawn_asteroid(
   mut spawn_timer: ResMut<SpawnTimer>,
   time: Res<Time>,
   scene_assets: Res<SceneAssets>,
-  window_query: Query<&Window>,
-  camera_query: Query<&Projection, With<MainCamera>>,
+  visible_range_query: Query<&VisibleRange>,
 )
 {
   spawn_timer.timer.tick(time.delta());
@@ -115,54 +79,61 @@ fn spawn_asteroid(
       return;
   }
 
-  let (x_range, z_range) = calculate_spawn_ranges(window_query, camera_query);
-  info!("x range: {:?}, z range: {:?}", x_range, z_range);
-
-  let mut rng = rand::thread_rng();
-
-  let spawn_edge = rng.gen_bool(0.5); // true for X edge, false for Z edge
-
-  let translation = if spawn_edge
+  if let Ok(visible_range) = visible_range_query.get_single()
   {
-    Vec3::new(
-      if rng.gen_bool(0.5) { x_range.start } else { x_range.end },
-      0.0, // Assuming asteroids move in the XZ plane, Y is set to 0 or another appropriate value
-      rng.gen_range(z_range.start..=z_range.end),
-    )
+    let (x_range, z_range) = (visible_range.x_range.clone(), visible_range.z_range.clone());
+    info!("x range: {:?}, z range: {:?}", x_range, z_range);
+
+    let mut rng = rand::thread_rng();
+
+    let spawn_edge = rng.gen_bool(0.5); // true for X edge, false for Z edge
+
+    let translation = if spawn_edge
+    {
+      Vec3::new(
+        if rng.gen_bool(0.5) { x_range.start } else { x_range.end },
+        0.0, // Assuming asteroids move in the XZ plane, Y is set to 0 or another appropriate value
+        rng.gen_range(z_range.start..=z_range.end),
+      )
+    }
+    else
+    {
+      // Spawn on the Z edge
+      Vec3::new(
+        rng.gen_range(x_range.start..=x_range.end),
+        0.0, // Assuming asteroids move in the XZ plane, Y is set to 0 or another appropriate value
+        if rng.gen_bool(0.5) { z_range.start } else { z_range.end },
+      )
+    };
+
+
+    let mut random_unit_vector =
+        || Vec3::new(rng.gen_range(-1.0..1.0), 0., rng.gen_range(-1.0..1.0)).normalize_or_zero();
+    let velocity = make_velocity_toward_screen(&x_range, &z_range, translation);
+    let acceleration = random_unit_vector() * ACCELERATION_SCALAR;
+
+    commands.spawn((
+      MovingObjectBundle {
+        acceleration: Acceleration::new(acceleration),
+        velocity: Velocity::new(velocity),
+        collider: Collider::new(RADIUS),
+        model: SceneBundle
+        {
+          scene: scene_assets.asteroid.clone(),
+          transform: Transform::from_translation(translation)
+                               .with_scale(Vec3::splat(0.5)),
+          ..default()
+        },
+      },
+      Asteroid,
+      Health::new(HEALTH),
+      CollisionDamage::new(COLLISION_DAMAGE),
+    ));
   }
   else
   {
-    // Spawn on the Z edge
-    Vec3::new(
-      rng.gen_range(x_range.start..=x_range.end),
-      0.0, // Assuming asteroids move in the XZ plane, Y is set to 0 or another appropriate value
-      if rng.gen_bool(0.5) { z_range.start } else { z_range.end },
-    )
-  };
-
-
-  let mut random_unit_vector =
-      || Vec3::new(rng.gen_range(-1.0..1.0), 0., rng.gen_range(-1.0..1.0)).normalize_or_zero();
-  let velocity = make_velocity_toward_screen(&x_range, &z_range, translation);
-  let acceleration = random_unit_vector() * ACCELERATION_SCALAR;
-
-  commands.spawn((
-    MovingObjectBundle {
-      acceleration: Acceleration::new(acceleration),
-      velocity: Velocity::new(velocity),
-      collider: Collider::new(RADIUS),
-      model: SceneBundle
-      {
-        scene: scene_assets.asteroid.clone(),
-        transform: Transform::from_translation(translation)
-                             .with_scale(Vec3::splat(0.5)),
-        ..default()
-      },
-    },
-    Asteroid,
-    Health::new(HEALTH),
-    CollisionDamage::new(COLLISION_DAMAGE),
-  ));
+    assert!(false, "you got too many VisibleRange entities");
+  }
 }
 
 

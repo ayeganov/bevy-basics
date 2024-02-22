@@ -7,7 +7,8 @@ use bevy::{
       Extent3d, TextureDescriptor, TextureDimension, TextureFormat, TextureUsages,
     },
     camera::RenderTarget,
-    camera::Viewport
+    camera::Viewport,
+    view::RenderLayers
   }
 };
 
@@ -100,11 +101,6 @@ fn add_vision(mut images: ResMut<Assets<Image>>,
               mut commands: Commands,
 )
 {
-  if !visions.is_empty()
-  {
-    info!("I got visions");
-  }
-
   for (vision_id, mut vision) in visions.iter_mut()
   {
     info!("Adding vision to id: {}", vision.id);
@@ -184,7 +180,8 @@ fn make_pickable(mut commands: Commands,
   {
     commands
       .entity(entity)
-      .insert((PickableBundle::default(), HIGHLIGHT_TINT.clone()));
+      .insert((PickableBundle::default(), HIGHLIGHT_TINT.clone()))
+      .insert(RenderLayers::all());
   }
 }
 
@@ -275,7 +272,6 @@ fn handle_vision_selection(mut selected: EventReader<VisionSelected>,
                            mut commands: Commands,
 )
 {
-  info!("You clicked!");
   {
     let already_selected_query = params.p1();
 
@@ -294,14 +290,12 @@ fn handle_vision_selection(mut selected: EventReader<VisionSelected>,
     {
       if vision_id == *selected_vision_id
       {
-        info!("Gotcha!");
-        info!("Vision: {:?}", vision_id);
         commands.entity(vision_id).insert(PickSelection {
           is_selected: true
         });
 
         vision.selected_cam_id = Some(attach_vision_camera(&mut commands, vision_id, &vision));
-        break;
+        return;
       }
     }
   }
@@ -316,7 +310,7 @@ fn draw_selected_vision(mut gizmos: Gizmos,
   {
     if pick.is_selected
     {
-      for (idx, &child) in children.iter().enumerate()
+      for (_idx, &child) in children.iter().enumerate()
       {
         if let Ok((projection, &transform)) = query_proj.get(child)
         {
