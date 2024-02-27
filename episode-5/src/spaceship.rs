@@ -1,4 +1,4 @@
-use bevy::prelude::*;
+use bevy::{prelude::*, transform};
 
 use rand::prelude::*;
 
@@ -69,24 +69,21 @@ impl Plugin for SpaceshipPlugin
 
 fn spawn_spaceships(mut commands: Commands,
                     scene_assets: Res<SceneAssets>,
-                    visible_range_query: Query<&VisibleRange>,
+                    visible_range: Res<VisibleRange>,
 )
 {
-  if let Ok(visible_range) = visible_range_query.get_single()
+  let mut rng = rand::thread_rng();
+
+  let id_offset = 2;
+  for spaceship_num in 0..NUM_SPACESHIPS
   {
-    let mut rng = rand::thread_rng();
+    let location = Vec3::new(
+      rng.gen_range(visible_range.x_range.clone()),
+      0.0, // Assuming asteroids move in the XZ plane, Y is set to 0 or another appropriate value
+      rng.gen_range(visible_range.z_range.clone()),
+    );
 
-    let id_offset = 2;
-    for spaceship_num in 0..NUM_SPACESHIPS
-    {
-      let location = Vec3::new(
-        rng.gen_range(visible_range.x_range.clone()),
-        0.0, // Assuming asteroids move in the XZ plane, Y is set to 0 or another appropriate value
-        rng.gen_range(visible_range.z_range.clone()),
-      );
-
-      spawn_spaceship(&mut commands, &scene_assets, location, spaceship_num + id_offset);
-    }
+    spawn_spaceship(&mut commands, &scene_assets, location, spaceship_num + id_offset);
   }
 }
 
@@ -124,41 +121,44 @@ fn spaceship_movement_controls(
     time: Res<Time>,
 )
 {
-  let Ok((mut transform, mut velocity)) = query.get_single_mut() else {
-      return;
-  };
-  let mut rotation = 0.0;
-  let mut roll = 0.0;
-  let mut movement = 0.0;
+//  let Ok((mut transform, mut velocity)) = query.get_single_mut() else {
+//      return;
+//  };
+  for (mut transform, mut velocity) in query.iter_mut()
+  {
+    let mut rotation = 0.0;
+    let mut roll = 0.0;
+    let mut movement = 0.0;
 
-  if keyboard_input.pressed(KeyCode::D) {
-      rotation = -SPACESHIP_ROTATION_SPEED * time.delta_seconds();
-  } else if keyboard_input.pressed(KeyCode::A) {
-      rotation = SPACESHIP_ROTATION_SPEED * time.delta_seconds();
+    if keyboard_input.pressed(KeyCode::D) {
+        rotation = -SPACESHIP_ROTATION_SPEED * time.delta_seconds();
+    } else if keyboard_input.pressed(KeyCode::A) {
+        rotation = SPACESHIP_ROTATION_SPEED * time.delta_seconds();
+    }
+
+    if keyboard_input.pressed(KeyCode::S) {
+        movement = -SPACESHIP_SPEED;
+    } else if keyboard_input.pressed(KeyCode::W) {
+        movement = SPACESHIP_SPEED;
+    }
+
+    if keyboard_input.pressed(KeyCode::ShiftLeft) {
+        roll = -SPACESHIP_ROLL_SPEED * time.delta_seconds();
+    } else if keyboard_input.pressed(KeyCode::ControlLeft) {
+        roll = SPACESHIP_ROLL_SPEED * time.delta_seconds();
+    }
+
+    // Rotate around the Y-axis.
+    // Ignores the Z-axis rotation applied below.
+    transform.rotate_y(rotation);
+
+    // Rotate around the local Z-axis.
+    // The rotation is relative to the current rotation!
+    transform.rotate_local_z(roll);
+
+    // Update the spaceship's velocity based on new direction.
+    velocity.value = transform.forward() * movement;
   }
-
-  if keyboard_input.pressed(KeyCode::S) {
-      movement = -SPACESHIP_SPEED;
-  } else if keyboard_input.pressed(KeyCode::W) {
-      movement = SPACESHIP_SPEED;
-  }
-
-  if keyboard_input.pressed(KeyCode::ShiftLeft) {
-      roll = -SPACESHIP_ROLL_SPEED * time.delta_seconds();
-  } else if keyboard_input.pressed(KeyCode::ControlLeft) {
-      roll = SPACESHIP_ROLL_SPEED * time.delta_seconds();
-  }
-
-  // Rotate around the Y-axis.
-  // Ignores the Z-axis rotation applied below.
-  transform.rotate_y(rotation);
-
-  // Rotate around the local Z-axis.
-  // The rotation is relative to the current rotation!
-  transform.rotate_local_z(roll);
-
-  // Update the spaceship's velocity based on new direction.
-  velocity.value = transform.forward() * movement;
 }
 
 
@@ -169,30 +169,33 @@ fn spaceship_weapon_controls(
     scene_assets: Res<SceneAssets>,
 )
 {
-  let Ok(transform) = query.get_single() else {
-    return;
-  };
+//  let Ok(transform) = query.get_single() else {
+//    return;
+//  };
 
   if keyboard_input.pressed(KeyCode::Space)
   {
-    commands.spawn((
-      MovingObjectBundle
-      {
-        velocity: Velocity::new(transform.forward() * MISSILE_SPEED),
-        acceleration: Acceleration::new(Vec3::ZERO),
-        collider: Collider::new(MISSILE_RADIUS),
-        model: SceneBundle {
-          scene: scene_assets.missiles.clone(),
-          transform: Transform::from_translation(
-            transform.translation + transform.forward() * MISSILE_FORWARD_SPAWN_SCALAR,
-          ).with_scale(MISSILE_SCALE),
-          ..default()
+    for transform in query.iter()
+    {
+      commands.spawn((
+        MovingObjectBundle
+        {
+          velocity: Velocity::new(transform.forward() * MISSILE_SPEED),
+          acceleration: Acceleration::new(Vec3::ZERO),
+          collider: Collider::new(MISSILE_RADIUS),
+          model: SceneBundle {
+            scene: scene_assets.missiles.clone(),
+            transform: Transform::from_translation(
+              transform.translation + transform.forward() * MISSILE_FORWARD_SPAWN_SCALAR,
+            ).with_scale(MISSILE_SCALE),
+            ..default()
+          },
         },
-      },
-      SpaceshipMissile,
-      Health::new(MISSILE_HEALTH),
-      CollisionDamage::new(MISSILE_COLLISION_DAMAGE),
-    ));
+        SpaceshipMissile,
+        Health::new(MISSILE_HEALTH),
+        CollisionDamage::new(MISSILE_COLLISION_DAMAGE),
+      ));
+    }
   }
 }
 

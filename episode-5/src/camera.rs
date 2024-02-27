@@ -9,7 +9,7 @@ pub struct MainCamera;
 
 pub struct CameraPlugin;
 
-#[derive(Component, Debug, Default)]
+#[derive(Resource, Debug, Default)]
 pub struct VisibleRange
 {
   pub x_range: Range<f32>,
@@ -21,9 +21,10 @@ impl Plugin for CameraPlugin
 {
   fn build(&self, app: &mut App)
   {
-    app.add_systems(Startup, spawn_camera)
+    app.init_resource::<VisibleRange>()
+       .add_systems(Startup, spawn_camera)
        .add_event::<WindowResized>()
-       .add_systems(Startup, update_visible_range)
+       .add_systems(Startup, update_visible_range.after(spawn_camera))
        .add_systems(PreUpdate, update_visible_range.run_if(on_event::<WindowResized>()));
   }
 }
@@ -44,16 +45,10 @@ fn spawn_camera(mut commands: Commands)
 
 fn update_visible_range(window_query: Query<&Window>,
                         camera_query: Query<&Projection, With<MainCamera>>,
-                        query: Query<Entity, With<VisibleRange>>,
-                        mut commands: Commands,
+                        mut visible_range: ResMut<VisibleRange>,
 )
 {
   info!("Window has been resized!");
-
-  for entity in query.iter()
-  {
-    commands.entity(entity).despawn();
-  }
 
   let window = window_query.single();
   let aspect_ratio = window.width() as f32 / window.height() as f32;
@@ -67,18 +62,14 @@ fn update_visible_range(window_query: Query<&Window>,
       let visible_width = visible_height * aspect_ratio;
 
       // Calculate spawn ranges based on the visible area
-      let spawn_range_x: Range<f32> = (-visible_width / 2.0) .. (visible_width / 2.0);
-      let spawn_range_z: Range<f32> = (-visible_height / 2.0) .. (visible_height / 2.0);
-
-      commands.spawn(VisibleRange
-      {
-        x_range: spawn_range_x,
-        z_range: spawn_range_z
-      });
+      visible_range.x_range = (-visible_width / 2.0) .. (visible_width / 2.0);
+      visible_range.z_range = (-visible_height / 2.0) .. (visible_height / 2.0);
+      info!("visible range: {:?}", visible_range);
     }
   }
   else
   {
-    commands.spawn(VisibleRange::default());
+    visible_range.x_range = -30.0 .. 30.0;
+    visible_range.z_range = -30.0 .. 30.0;
   }
 }
