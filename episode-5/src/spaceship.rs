@@ -12,6 +12,7 @@ use crate::{
   vision::VisionObjectBundle,
   schedule::InGameSet,
   state::GameState,
+  ai_agent::AiAgent
 };
 
 
@@ -109,6 +110,7 @@ fn spawn_spaceship(commands: &mut Commands,
     },
     VisionObjectBundle::new(spaceship_num as isize),
     Spaceship,
+    AiAgent,
     Health::new(SPACESHIP_HEALTH),
     CollisionDamage::new(SPACESHIP_COLLISION_DAMAGE),
   ));
@@ -121,9 +123,9 @@ fn spaceship_movement_controls(
     time: Res<Time>,
 )
 {
-//  let Ok((mut transform, mut velocity)) = query.get_single_mut() else {
-//      return;
-//  };
+  let Ok((_transform, _velocity)) = query.get_single_mut() else {
+      return;
+  };
   for (mut transform, mut velocity) in query.iter_mut()
   {
     let mut rotation = 0.0;

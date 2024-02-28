@@ -10,6 +10,7 @@ mod schedule;
 mod spaceship;
 mod state;
 mod vision;
+mod ai_agent;
 
 use bevy::prelude::*;
 
@@ -26,6 +27,7 @@ use schedule::SchedulePlugin;
 use spaceship::SpaceshipPlugin;
 use state::StatePlugin;
 use vision::VisionPlugin;
+use ai_agent::AiAgentPlugin;
 
 
 fn main() {
@@ -49,6 +51,7 @@ fn main() {
     .add_plugins(StatePlugin)
     .add_plugins(DefaultPickingPlugins)
     .add_plugins(VisionPlugin)
+    .add_plugins(AiAgentPlugin)
 //    .add_plugins(EditorPlugin::default())
     // .add_plugins(DebugPlugin)
     .run();

@@ -80,7 +80,7 @@ fn spawn_asteroid(
   }
 
   let (x_range, z_range) = (visible_range.x_range.clone(), visible_range.z_range.clone());
-  info!("x range: {:?}, z range: {:?}", x_range, z_range);
+  debug!("x range: {:?}, z range: {:?}", x_range, z_range);
 
   let mut rng = rand::thread_rng();
 
