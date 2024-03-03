@@ -1,5 +1,6 @@
-use bevy::{prelude::*};
-use rand::Rng;
+use bevy::prelude::*;
+
+use rand::prelude::*;
 
 use crate::movement::Velocity;
 
@@ -7,29 +8,88 @@ const ROTATION_SPEED: f32 = 2.5;
 const SPEED: f32 = 15.0;
 
 
-#[derive(Component, Debug)]
+/// What is the purpose of the agent - to make decisions and affect other
+/// agents/environments
+#[derive(Component, Debug, Default)]
 pub struct AiAgent;
 
 
-pub struct AiAgentPlugin;
+/// What is the purpose of an environment - to provide RESOURCES and SENSORY
+/// data
+#[derive(Component, Debug)]
+pub struct Environment;
 
 
-#[derive(Component, Debug, Clone, Default, Reflect)]
+/// Sensors provide the limitations on what agents are able to interact with.
+#[derive(Component, Debug)]
+pub struct Sensor;
+
+
+/// Universal information processor - chooses what sensory information to
+/// process and produces an array of outputs to drive the agents behavior
+#[derive(Component, Debug, Clone, Reflect)]
 #[reflect(Component, Default)]
-pub enum AgentType
+pub enum Brain
 {
-  #[default]
-  Random,
+  Random(RandomBrain),
   Human,
   Neat
 }
+
+
+#[derive(Component, Debug, Clone, Reflect)]
+#[reflect(Component, Default)]
+pub struct RandomBrain
+{
+
+}
+
+
+impl Default for Brain
+{
+  fn default() -> Self
+  {
+    Brain::Random(Default::default())
+  }
+}
+
+
+impl Default for RandomBrain
+{
+  fn default() -> Self
+  {
+    RandomBrain {}
+  }
+}
+
+
+pub trait AgentBrain
+{
+  // TODO: How to collection inputs?
+  fn process_input(sensations: Vec<f32>) -> Vec<f32>;
+}
+
+
+pub struct AiAgentPlugin;
 
 
 impl Plugin for AiAgentPlugin
 {
   fn build(&self, app: &mut App)
   {
-    app.add_systems(Update, make_decisions);
+    app.add_systems(Update, (make_decisions, update_agents));
+  }
+}
+
+
+fn update_agents(agents_query: Query<(Entity, &AiAgent, &Sensor), (With<AiAgent>, With<Sensor>)>,
+                 sensors_query: Query<Entity, With<Sensor>>,
+                 time: Res<Time>,
+)
+{
+  for agent_ent in agents_query.iter()
+  {
+    
   }
 }
 
