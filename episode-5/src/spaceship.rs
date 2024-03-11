@@ -6,7 +6,7 @@ use rand::prelude::*;
 use crate::{
   asset_loader::SceneAssets,
   collision_detection::{Collider, CollisionDamage},
-  camera::VisibleRange,
+  camera::{VisibleRange, update_visible_range},
   health::Health,
   movement::{Acceleration, MovingObjectBundle, Velocity},
   vision::VisionObjectBundle,
@@ -51,7 +51,7 @@ impl Plugin for SpaceshipPlugin
 {
   fn build(&self, app: &mut App)
   {
-    app.add_systems(PostStartup, (spawn_spaceships,))
+    app.add_systems(PostStartup, spawn_spaceships.after(update_visible_range))
       .add_systems(OnEnter(GameState::GameOver), spawn_spaceships)
       .add_systems(
         Update,

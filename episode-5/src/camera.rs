@@ -24,7 +24,7 @@ impl Plugin for CameraPlugin
     app.init_resource::<VisibleRange>()
        .add_systems(Startup, spawn_camera)
        .add_event::<WindowResized>()
-       .add_systems(Startup, update_visible_range.after(spawn_camera))
+       .add_systems(PostStartup, update_visible_range)
        .add_systems(PreUpdate, update_visible_range.run_if(on_event::<WindowResized>()));
   }
 }
@@ -43,7 +43,7 @@ fn spawn_camera(mut commands: Commands)
 }
 
 
-fn update_visible_range(window_query: Query<&Window>,
+pub fn update_visible_range(window_query: Query<&Window>,
                         camera_query: Query<&Projection, With<MainCamera>>,
                         mut visible_range: ResMut<VisibleRange>,
 )

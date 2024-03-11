@@ -65,8 +65,31 @@ impl Default for RandomBrain
 
 pub trait AgentBrain
 {
-  // TODO: How to collection inputs?
-  fn process_input(sensations: Vec<f32>) -> Vec<f32>;
+  // TODO: How to collect inputs?
+  fn process_input(&mut self, sensations: Vec<f32>) -> Vec<f32>;
+}
+
+
+impl AgentBrain for Brain
+{
+  fn process_input(& mut self, sensations: Vec<f32>) -> Vec<f32>
+  {
+    match self
+    {
+      Brain::Random(brain) => brain.process_input(sensations),
+      Brain::Human => vec![],
+      Brain::Neat => vec![]
+    }
+  }
+}
+
+
+impl AgentBrain for RandomBrain
+{
+  fn process_input(& mut self, sensations: Vec<f32>) -> Vec<f32>
+  {
+    vec![]
+  }
 }
 
 
