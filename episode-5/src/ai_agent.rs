@@ -16,12 +16,12 @@ pub struct AiAgent;
 
 /// What is the purpose of an environment - to provide RESOURCES and SENSORY
 /// data
-#[derive(Component, Debug)]
+#[derive(Component, Debug, Default)]
 pub struct Environment;
 
 
 /// Sensors provide the limitations on what agents are able to interact with.
-#[derive(Component, Debug)]
+#[derive(Component, Debug, Default)]
 pub struct Sensor;
 
 
@@ -110,7 +110,7 @@ fn update_agents(agents_query: Query<(Entity, &AiAgent, &Sensor), (With<AiAgent>
                  time: Res<Time>,
 )
 {
-  for agent_ent in agents_query.iter()
+  for (agent_ent, agent, sensor) in agents_query.iter()
   {
     
   }
