@@ -16,7 +16,7 @@ use bevy_mod_picking::prelude::*;
 
 use crate::{ai_agent::Sensor, schedule::InGameSet};
 
-#[derive(Component, Debug, Default)]
+#[derive(Component, Debug, Default, Clone)]
 pub struct Vision
 {
   pub id: isize,

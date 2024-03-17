@@ -11,6 +11,7 @@ mod spaceship;
 mod state;
 mod vision;
 mod ai_agent;
+mod ai_framework;
 
 use bevy::prelude::*;
 
