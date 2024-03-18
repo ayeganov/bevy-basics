@@ -3,6 +3,7 @@ use bevy::prelude::*;
 use rand::prelude::*;
 
 use crate::movement::Velocity;
+use crate::ai_framework::Sensor;
 
 const ROTATION_SPEED: f32 = 2.5;
 const SPEED: f32 = 15.0;
@@ -18,11 +19,6 @@ pub struct AiAgent;
 /// data
 #[derive(Component, Debug, Default)]
 pub struct AiEnvironment;
-
-
-/// Sensors provide the limitations on what agents are able to interact with.
-#[derive(Component, Debug, Default)]
-pub struct Sensor;
 
 
 /// Universal information processor - chooses what sensory information to

@@ -14,7 +14,7 @@ use bevy::{
 
 use bevy_mod_picking::prelude::*;
 
-use crate::{ai_agent::Sensor, schedule::InGameSet};
+use crate::schedule::InGameSet;
 
 #[derive(Component, Debug, Default, Clone)]
 pub struct Vision
@@ -38,7 +38,6 @@ pub struct VisionCam;
 pub struct VisionObjectBundle
 {
   pub vision: Vision,
-  pub sensor: Sensor,
   pub click_event: On::<Pointer<Click>>
 }
 
@@ -51,7 +50,6 @@ impl Default for VisionObjectBundle
     {
       vision: Vision { id: 1, ..default() },
       click_event: On::<Pointer<Click>>::send_event::<VisionSelected>(),
-      ..default()
     }
   }
 }
