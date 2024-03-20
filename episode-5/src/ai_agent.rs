@@ -2,8 +2,10 @@ use bevy::prelude::*;
 
 use rand::prelude::*;
 
+use crate::ai_framework::Environment;
 use crate::movement::Velocity;
 use crate::ai_framework::Sensor;
+use crate::ai_framework::Sensing;
 
 const ROTATION_SPEED: f32 = 2.5;
 const SPEED: f32 = 15.0;
@@ -102,12 +104,29 @@ impl Plugin for AiAgentPlugin
 
 
 fn update_agents(agents_query: Query<(Entity, &AiAgent, &Sensor), (With<AiAgent>, With<Sensor>)>,
-                 sensors_query: Query<Entity, With<Sensor>>,
+                 sensors_query: Query<(Entity, &Sensor), With<Sensor>>,
+                 images: Res<Assets<Image>>,
                  time: Res<Time>,
 )
 {
-  for (agent_ent, agent, sensor) in agents_query.iter()
+  for (sensor_ent, sensor) in sensors_query.iter()
   {
+    match sensor
+    {
+      Sensor::Vision(sensing) =>
+      {
+        info!("Id of vision: {}", sensing.id);
+//        info!("Image address in update_agents: {:?}", &sensing.visual_sensor);
+        if let Some(sensing) = sensing.sense(Environment::VisibleEnvironment{}, &images)
+        {
+          println!("Sensing: {:?}", sensing);
+        }
+        else
+        {
+//          println!("No sensing");
+        }
+      }
+    }
   }
 }
 

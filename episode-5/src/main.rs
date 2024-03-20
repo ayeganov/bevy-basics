@@ -12,6 +12,7 @@ mod state;
 mod vision;
 mod ai_agent;
 mod ai_framework;
+mod gpu_copy;
 
 use bevy::prelude::*;
 
@@ -29,6 +30,7 @@ use spaceship::SpaceshipPlugin;
 use state::StatePlugin;
 use vision::VisionPlugin;
 use ai_agent::AiAgentPlugin;
+use gpu_copy::image_copy::ImageCopyPlugin;
 
 
 fn main() {
@@ -53,6 +55,7 @@ fn main() {
     .add_plugins(DefaultPickingPlugins)
     .add_plugins(VisionPlugin)
     .add_plugins(AiAgentPlugin)
+    .add_plugins(ImageCopyPlugin)
 //    .add_plugins(EditorPlugin::default())
     // .add_plugins(DebugPlugin)
     .run();

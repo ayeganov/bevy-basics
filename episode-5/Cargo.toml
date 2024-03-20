@@ -8,6 +8,9 @@ bevy = "0.12.1"
 bevy_editor_pls = "0.7.0"
 bevy_mod_picking = "0.17.0"
 rand = "0.8.5"
+wgpu = "0.17.1"
+pollster = "0.3"
+futures-intrusive = "0.5"
 
 # Enable a small amount of optimization in debug mode
 [profile.dev]

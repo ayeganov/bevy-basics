@@ -7,6 +7,7 @@ use bevy::{
       Extent3d, TextureDescriptor, TextureDimension, TextureFormat, TextureUsages,
     },
     camera::RenderTarget,
+    renderer::RenderDevice,
     camera::Viewport,
     view::RenderLayers
   }
@@ -15,6 +16,8 @@ use bevy::{
 use bevy_mod_picking::prelude::*;
 
 use crate::schedule::InGameSet;
+use crate::ai_framework::Sensor;
+use crate::gpu_copy::image_copy::ImageCopier;
 
 #[derive(Component, Debug, Default, Clone)]
 pub struct Vision
@@ -22,7 +25,7 @@ pub struct Vision
   pub id: isize,
   pub cam_id: Option<Entity>,
   pub selected_cam_id: Option<Entity>,
-  pub visual_sensor: Handle<Image>,
+  pub visual_sensor: Option<Handle<Image>>,
 }
 
 
@@ -37,7 +40,7 @@ pub struct VisionCam;
 #[derive(Bundle)]
 pub struct VisionObjectBundle
 {
-  pub vision: Vision,
+  vision: Sensor,
   pub click_event: On::<Pointer<Click>>
 }
 
@@ -48,7 +51,7 @@ impl Default for VisionObjectBundle
   {
     Self
     {
-      vision: Vision { id: 1, ..default() },
+      vision: Sensor::Vision(Vision::default()),
       click_event: On::<Pointer<Click>>::send_event::<VisionSelected>(),
     }
   }
@@ -60,7 +63,14 @@ impl VisionObjectBundle
   pub fn new(id: isize) -> Self
   {
     let mut default = VisionObjectBundle::default();
-    default.vision.id = id;
+    match default.vision
+    {
+      Sensor::Vision(ref mut vision) =>
+      {
+        vision.id = id;
+      },
+      _ => {}
+    }
     default
   }
 }
@@ -98,49 +108,69 @@ impl From<ListenerInput<Pointer<Click>>> for VisionSelected
 
 
 fn add_vision(mut images: ResMut<Assets<Image>>,
-              mut visions: Query<(Entity, &mut Vision), (With<Vision>, Without<VisionSensing>)>,
+              mut visions: Query<(Entity, &Sensor), (With<Sensor>, Without<VisionSensing>)>,
               mut commands: Commands,
+              render_device: Res<RenderDevice>,
 )
 {
-  for (vision_id, mut vision) in visions.iter_mut()
+  for (vision_id, sensor) in visions.iter_mut()
   {
-    info!("Adding vision to id: {}", vision.id);
-    vision.visual_sensor = images.add(create_vision_sensor());
-    let camera_id = commands.spawn((Camera3dBundle
+    match sensor
     {
-      camera_3d: Camera3d
+      Sensor::Vision(vision) =>
       {
-        clear_color: ClearColorConfig::None,
-        ..default()
-      },
-      camera: Camera
-      {
-        // render before the "main pass" camera
-        order: 1,
-        target: RenderTarget::Image(vision.visual_sensor.clone()),
-        ..default()
-      },
-      transform: Transform::from_translation(Vec3::new(0.0, -1.0, -7.0))
-          .looking_at(Vec3::new(0.0, -1.0, -30.), Vec3::Y),
-      projection: PerspectiveProjection
-      {
-        far: 500.0,
-        ..default()
-      }.into(),
-      ..default()
-    },
-    )).id();
+        info!("Adding vision to id: {}", vision.id);
+        info!("Image address before replacement: {:?}", &vision.visual_sensor);
+        let mut new_vision = vision.clone();
+        let (render_target, destination) = create_vision_sensor(&mut commands, &render_device, &mut images);
+        info!("Size of destination image: {:?}", images.get(&destination).unwrap().size());
+        new_vision.visual_sensor = Some(destination);
 
-    vision.cam_id = Some(camera_id);
+        info!("Image address after replacement: {:?}", &new_vision.visual_sensor);
 
-    commands.entity(camera_id).insert(VisionCam{});
-    commands.entity(vision_id).push_children(&[camera_id]);
-    commands.entity(vision_id).insert(VisionSensing{});
+//        let second_window = commands.spawn(Window { title: "Vision".to_string(), ..Default::default() }).id();
+        let camera_id = commands.spawn((Camera3dBundle
+        {
+          camera_3d: Camera3d
+          {
+            clear_color: ClearColorConfig::Custom(Color::default()),
+            ..default()
+          },
+          camera: Camera
+          {
+            // render before the "main pass" camera
+            order: 1,
+            target: RenderTarget::Image(render_target),
+//            target: RenderTarget::Window(bevy::window::WindowRef::Entity(second_window)),
+            ..default()
+          },
+          transform: Transform::from_translation(Vec3::new(0.0, -1.0, -7.0))
+              .looking_at(Vec3::new(0.0, -1.0, -30.), Vec3::Y),
+          projection: PerspectiveProjection
+          {
+            far: 500.0,
+            ..default()
+          }.into(),
+          ..default()
+        },
+        )).id();
+
+        new_vision.cam_id = Some(camera_id);
+
+        commands.entity(vision_id).remove::<Sensor>();
+
+        commands.entity(camera_id).insert(VisionCam{});
+        commands.entity(vision_id).insert(new_vision);
+        commands.entity(vision_id).push_children(&[camera_id]);
+        commands.entity(vision_id).insert(VisionSensing{});
+      },
+      _ => {}
+    }
   }
 }
 
 
-fn create_vision_sensor() -> Image
+fn create_vision_sensor(commands: &mut Commands, render_device: &Res<RenderDevice>, images: &mut ResMut<Assets<Image>>) -> (Handle<Image>, Handle<Image>)
 {
   let size = Extent3d {
     width: 50,
@@ -148,11 +178,10 @@ fn create_vision_sensor() -> Image
     ..default()
   };
 
-  // This is the texture that will be rendered to.
-  let mut image = Image
+  let mut render_target_image = Image
   {
     texture_descriptor: TextureDescriptor {
-      label: None,
+      label: Some("Vision Source"),
       size,
       dimension: TextureDimension::D2,
       format: TextureFormat::Bgra8UnormSrgb,
@@ -160,16 +189,43 @@ fn create_vision_sensor() -> Image
       sample_count: 1,
       usage: TextureUsages::TEXTURE_BINDING
           | TextureUsages::COPY_DST
+          | TextureUsages::COPY_SRC
           | TextureUsages::RENDER_ATTACHMENT,
       view_formats: &[],
     },
     ..default()
   };
 
-  // fill image.data with zeroes
-  image.resize(size);
+  render_target_image.resize(size);
+  let render_target_image_handle = images.add(render_target_image);
 
-  image
+  let mut cpu_image = Image
+  {
+    texture_descriptor: TextureDescriptor {
+      label: Some("Vision Destination"),
+      size,
+      dimension: TextureDimension::D2,
+      format: TextureFormat::Rgba8UnormSrgb,
+      mip_level_count: 1,
+      sample_count: 1,
+      usage: TextureUsages::COPY_DST | TextureUsages::TEXTURE_BINDING,
+      view_formats: &[],
+    },
+    ..Default::default()
+  };
+  cpu_image.resize(size);
+
+  let cpu_image_handle = images.add(cpu_image);
+
+  commands.spawn(ImageCopier::new(
+    render_target_image_handle.clone(),
+    cpu_image_handle.clone(),
+    size,
+    render_device
+  ));
+
+
+  (render_target_image_handle, cpu_image_handle)
 }
 
 
