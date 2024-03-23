@@ -1,4 +1,8 @@
 use bevy::prelude::*;
+use bevy::render::texture::Image;
+use image::{ImageBuffer, Rgba};
+use std::{path::Path, ops::Deref};
+
 
 use crate::vision::Vision as VisionSensor;
 
@@ -24,6 +28,38 @@ pub trait Sensing
 }
 
 
+fn save_image_to_disk(image: &Image, path: &Path) -> Result<(), image::ImageError>
+{
+  // Get the image dimensions
+  let size = image.texture_descriptor.size;
+  let width = size.width;
+  let height = size.height;
+
+  if image.data.len() == (width * height * 4) as usize
+  {
+    let data = image.data.deref();
+
+    // This function assumes the image is in RGBA8 format.
+    // If it's in a different format, conversion will be needed.
+    let image_buffer = ImageBuffer::<Rgba<u8>, _>::from_raw(width, height, data)
+        .ok_or(image::ImageError::Decoding(image::error::DecodingError::new(image::error::ImageFormatHint::Unknown, "Failed to create image buffer from raw data")))?;
+
+    image_buffer.save(path)
+  }
+  else
+  {
+    info!("Image width: {:?}", width);
+    info!("Image height: {:?}", height);
+    info!("Image data length: {:?}", image.data.len());
+    Err(image::ImageError::Parameter(image::error::ParameterError::from_kind(
+        image::error::ParameterErrorKind::DimensionMismatch,
+    )))
+  }
+
+}
+
+
+
 impl Sensing for VisionSensor
 {
   fn sense(&self, environment: Environment, images: &Res<Assets<Image>>) -> Option<Vec<f32>>
@@ -33,15 +69,18 @@ impl Sensing for VisionSensor
     {
       Environment::VisibleEnvironment =>
       {
-        info!("sensing Image address: {:?}", &self.visual_sensor);
         if let Some(handle) = &self.visual_sensor
         {
-          info!("Handle: {:?}", handle);
           if let Some(image) = images.get(handle)
           {
+            let path = Path::new("/tmp/ai_agent.png");
+            match save_image_to_disk(image, path)
+            {
+              Ok(_) => info!("Image saved to disk"),
+              Err(e) => error!("Error saving image to disk: {:?}", e),
+            }
+
             image.texture_descriptor.label.as_ref().map(|label| info!("Label: {:?}", label));
-            info!("Texture size: {:?}", (image.texture_descriptor.size.width, image.texture_descriptor.size.height));
-            info!("Image size: {:?}", (image.size()));
             let width = image.width() as usize;
             let start = (row_number * width) as usize;
             let end = start + width;

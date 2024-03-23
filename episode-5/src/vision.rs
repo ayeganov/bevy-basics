@@ -14,6 +14,7 @@ use bevy::{
 };
 
 use bevy_mod_picking::prelude::*;
+use bevy_headless::CurImageContainer;
 
 use crate::schedule::InGameSet;
 use crate::ai_framework::Sensor;
@@ -108,27 +109,25 @@ impl From<ListenerInput<Pointer<Click>>> for VisionSelected
 
 
 fn add_vision(mut images: ResMut<Assets<Image>>,
-              mut visions: Query<(Entity, &Sensor), (With<Sensor>, Without<VisionSensing>)>,
+              mut visions: Query<(Entity, &mut Sensor), (With<Sensor>, Without<VisionSensing>)>,
               mut commands: Commands,
               render_device: Res<RenderDevice>,
 )
 {
-  for (vision_id, sensor) in visions.iter_mut()
+  for (vision_id, mut sensor) in visions.iter_mut()
   {
-    match sensor
+    match *sensor
     {
-      Sensor::Vision(vision) =>
+      Sensor::Vision(ref mut vision) =>
       {
         info!("Adding vision to id: {}", vision.id);
         info!("Image address before replacement: {:?}", &vision.visual_sensor);
-        let mut new_vision = vision.clone();
         let (render_target, destination) = create_vision_sensor(&mut commands, &render_device, &mut images);
         info!("Size of destination image: {:?}", images.get(&destination).unwrap().size());
-        new_vision.visual_sensor = Some(destination);
+        vision.visual_sensor = Some(destination);
 
-        info!("Image address after replacement: {:?}", &new_vision.visual_sensor);
+        info!("Image address after replacement: {:?}", &vision.visual_sensor);
 
-//        let second_window = commands.spawn(Window { title: "Vision".to_string(), ..Default::default() }).id();
         let camera_id = commands.spawn((Camera3dBundle
         {
           camera_3d: Camera3d
@@ -141,7 +140,6 @@ fn add_vision(mut images: ResMut<Assets<Image>>,
             // render before the "main pass" camera
             order: 1,
             target: RenderTarget::Image(render_target),
-//            target: RenderTarget::Window(bevy::window::WindowRef::Entity(second_window)),
             ..default()
           },
           transform: Transform::from_translation(Vec3::new(0.0, -1.0, -7.0))
@@ -155,15 +153,12 @@ fn add_vision(mut images: ResMut<Assets<Image>>,
         },
         )).id();
 
-        new_vision.cam_id = Some(camera_id);
-
-        commands.entity(vision_id).remove::<Sensor>();
+        vision.cam_id = Some(camera_id);
 
         commands.entity(camera_id).insert(VisionCam{});
-        commands.entity(vision_id).insert(new_vision);
         commands.entity(vision_id).push_children(&[camera_id]);
         commands.entity(vision_id).insert(VisionSensing{});
-      },
+      }
       _ => {}
     }
   }
@@ -184,7 +179,7 @@ fn create_vision_sensor(commands: &mut Commands, render_device: &Res<RenderDevic
       label: Some("Vision Source"),
       size,
       dimension: TextureDimension::D2,
-      format: TextureFormat::Bgra8UnormSrgb,
+      format: TextureFormat::Rgba8UnormSrgb,
       mip_level_count: 1,
       sample_count: 1,
       usage: TextureUsages::TEXTURE_BINDING
