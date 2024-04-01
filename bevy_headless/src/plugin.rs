@@ -132,23 +132,26 @@ impl RenderAsset for ImageSource
 #[derive(Component, Clone)]
 pub struct ImageExportStartFrame(u64);
 
-impl Default for ImageExportSettings {
-    fn default() -> Self {
-        Self { extension: "png".into() }
-    }
+impl Default for ImageExportSettings
+{
+  fn default() -> Self
+  {
+    Self { extension: "png".into() }
+  }
 }
 
-impl ExtractComponent for ImageExportSettings {
-    type Filter = ();
-    type Out = (Self, Handle<ImageSource>, ImageExportStartFrame);
-    type Query =
-        (&'static Self, &'static Handle<ImageSource>, &'static ImageExportStartFrame);
+impl ExtractComponent for ImageExportSettings
+{
+  type Filter = ();
+  type Out = (Self, Handle<ImageSource>, ImageExportStartFrame);
+  type Query =
+      (&'static Self, &'static Handle<ImageSource>, &'static ImageExportStartFrame);
 
-    fn extract_component(
-        (settings, source_handle, start_frame): QueryItem<'_, Self::Query>,
-    ) -> Option<Self::Out> {
-        Some((settings.clone(), source_handle.clone_weak(), start_frame.clone()))
-    }
+  fn extract_component((settings, source_handle, start_frame): QueryItem<'_, Self::Query>,
+  ) -> Option<Self::Out>
+  {
+    Some((settings.clone(), source_handle.clone_weak(), start_frame.clone()))
+  }
 }
 
 fn setup_exporters(
@@ -241,6 +244,8 @@ fn save_buffer_as_resource(
 
       if let Some(export_img) = locked_images.get_mut(export_img_idx)
       {
+        let mut buffer = export_img.0.write();
+        buffer.copy_from_slice(&image_bytes);
 //        export_img.buffer = ImageBuffer::from_raw(source_size.width, source_size.height, image_bytes).unwrap();
 //        log::info!("Address of buffer: {:?}", export_img.buffer.as_ptr() as *const _);
       }

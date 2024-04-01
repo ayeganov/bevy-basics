@@ -3,6 +3,7 @@ use bevy::render::texture::Image;
 use image::{ImageBuffer, Rgba};
 use std::{path::Path, ops::Deref};
 
+use rand::prelude::*;
 
 use crate::vision::Vision as VisionSensor;
 
@@ -62,15 +63,21 @@ impl Sensing for VisionSensor
 {
   fn sense(&self, environment: Environment, images: &Res<Assets<Image>>) -> Option<Vec<f32>>
   {
-    let row_number = 10;
+    let mut rng = rand::thread_rng();
+
+    let row_number = 25;
     match environment
     {
       Environment::VisibleEnvironment =>
       {
         if let Some(image) = &self.visual_sensor
         {
-          let path = Path::new("/tmp/ai_agent.png");
-          match save_image_to_disk(&image.buffer, path)
+          let frame_id = rng.next_u32();
+          let filename = format!("/tmp/{}/ai_agent_{}.png", self.id, frame_id);
+          let path = Path::new(filename.as_str());
+
+          let buffer = image.0.read();
+          match save_image_to_disk(&buffer, path)
           {
             Ok(_) => info!("Image saved to disk"),
             Err(e) => error!("Error saving image to disk: {:?}", e),
@@ -79,14 +86,14 @@ impl Sensing for VisionSensor
 //            info!("image data: {:?}", image.data);
 
 //            image.texture_descriptor.label.as_ref().map(|label| info!("Label: {:?}", label));
-          let width = image.buffer.width() as usize;
+          let width = buffer.width() as usize;
           let start = (row_number * width) as usize;
           let end = start + width;
-          let region_is_valid = start < image.buffer.len() && end <= image.buffer.len();
+          let region_is_valid = start < buffer.len() && end <= buffer.len();
 
           if region_is_valid
           {
-            let row_data = image.buffer.as_raw()[start..end].iter().map(|&b| b as f32).collect();
+            let row_data = buffer.as_raw()[start..end].iter().map(|&b| b as f32).collect();
             return Some(row_data);
           }
           else

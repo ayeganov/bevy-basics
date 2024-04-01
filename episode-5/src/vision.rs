@@ -160,7 +160,8 @@ fn add_vision(mut images: ResMut<Assets<Image>>,
       &mut export_sources,
       &mut exported_images,
     );
-        info!("Size of destination image: {:?}", destination.buffer.dimensions());
+        let dims = destination.0.read().dimensions();
+        info!("Size of destination image: {:?}", dims);
         vision.visual_sensor = Some(destination);
 
 //        info!("Image address after replacement: {:?}", &vision.visual_sensor);
@@ -169,7 +170,7 @@ fn add_vision(mut images: ResMut<Assets<Image>>,
         {
           camera_3d: Camera3d
           {
-            clear_color: ClearColorConfig::Custom(Color::default()),
+            clear_color: ClearColorConfig::Custom(Color::rgb(0.0, 0.0, 0.0)),
             ..default()
           },
           camera: Camera
