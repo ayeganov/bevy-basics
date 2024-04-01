@@ -14,11 +14,12 @@ use bevy::{
 };
 
 use bevy_mod_picking::prelude::*;
-use bevy_headless::CurImageContainer;
 
 use crate::schedule::InGameSet;
 use crate::ai_framework::Sensor;
 use crate::gpu_copy::image_copy::ImageCopier;
+
+use bevy_headless::{CurrImageContainer, HeadlessPlugin, ImageSource, ExportImage, ExportedImages};
 
 #[derive(Component, Debug, Default, Clone)]
 pub struct Vision
@@ -26,7 +27,7 @@ pub struct Vision
   pub id: isize,
   pub cam_id: Option<Entity>,
   pub selected_cam_id: Option<Entity>,
-  pub visual_sensor: Option<Handle<Image>>,
+  pub visual_sensor: Option<ExportImage>,
 }
 
 
@@ -77,6 +78,25 @@ impl VisionObjectBundle
 }
 
 
+fn save_img(curr_img: Res<CurrImageContainer>)
+{
+  let curr_img = curr_img.0.lock();
+  if !curr_img.extension.is_empty()
+  {
+    let path = curr_img.create_path("out");
+    info!("path is {path}");
+    let img = curr_img.img_buffer.clone();
+
+    std::thread::spawn(move ||
+    {
+      if let Err(e) = img.save(path)
+      {
+        error!("Couldn't save image | {e:?}");
+      };
+    });
+  }
+}
+
 pub struct VisionPlugin;
 
 
@@ -90,6 +110,7 @@ impl Plugin for VisionPlugin
         .chain()
         .in_set(InGameSet::EntityUpdates),
     )
+      .add_systems(Update, save_img)
     .add_systems(Update, handle_vision_selection.run_if(on_event::<VisionSelected>()))
     .add_event::<VisionSelected>();
   }
@@ -112,8 +133,16 @@ fn add_vision(mut images: ResMut<Assets<Image>>,
               mut visions: Query<(Entity, &mut Sensor), (With<Sensor>, Without<VisionSensing>)>,
               mut commands: Commands,
               render_device: Res<RenderDevice>,
+    mut export_sources: ResMut<Assets<ImageSource>>,
+    mut exported_images: ResMut<ExportedImages>,
+    mut scene_controller: ResMut<bevy_headless::SceneInfo>,
 )
 {
+  if visions.is_empty()
+  {
+    return;
+  }
+
   for (vision_id, mut sensor) in visions.iter_mut()
   {
     match *sensor
@@ -122,11 +151,19 @@ fn add_vision(mut images: ResMut<Assets<Image>>,
       {
         info!("Adding vision to id: {}", vision.id);
         info!("Image address before replacement: {:?}", &vision.visual_sensor);
-        let (render_target, destination) = create_vision_sensor(&mut commands, &render_device, &mut images);
-        info!("Size of destination image: {:?}", images.get(&destination).unwrap().size());
+//        let (_, destination) = create_vision_sensor(&mut commands, &render_device, &mut images);
+
+    let (render_target, destination) = bevy_headless::setup_render_target(
+      &mut commands,
+      &mut images,
+      &mut scene_controller,
+      &mut export_sources,
+      &mut exported_images,
+    );
+        info!("Size of destination image: {:?}", destination.buffer.dimensions());
         vision.visual_sensor = Some(destination);
 
-        info!("Image address after replacement: {:?}", &vision.visual_sensor);
+//        info!("Image address after replacement: {:?}", &vision.visual_sensor);
 
         let camera_id = commands.spawn((Camera3dBundle
         {
@@ -139,7 +176,7 @@ fn add_vision(mut images: ResMut<Assets<Image>>,
           {
             // render before the "main pass" camera
             order: 1,
-            target: RenderTarget::Image(render_target),
+            target: render_target,
             ..default()
           },
           transform: Transform::from_translation(Vec3::new(0.0, -1.0, -7.0))
@@ -169,7 +206,7 @@ fn create_vision_sensor(commands: &mut Commands, render_device: &Res<RenderDevic
 {
   let size = Extent3d {
     width: 50,
-    height: 200,
+    height: 20,
     ..default()
   };
 

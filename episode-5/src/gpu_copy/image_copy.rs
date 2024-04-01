@@ -4,7 +4,7 @@ use bevy::prelude::*;
 use bevy::render::render_asset::RenderAssets;
 use bevy::render::render_graph::{self, NodeRunError, RenderGraph, RenderGraphContext};
 use bevy::render::renderer::{RenderContext, RenderDevice, RenderQueue};
-use bevy::render::{Extract, RenderApp};
+use bevy::render::{Extract, Render, RenderApp, RenderSet};
 
 use bevy::render::render_resource::{
     Buffer, BufferDescriptor, BufferUsages, CommandEncoderDescriptor, Extent3d, ImageCopyBuffer,
@@ -15,6 +15,7 @@ use wgpu::Maintain;
 
 use std::sync::atomic::{AtomicBool, Ordering};
 
+
 pub fn receive_images(
     image_copiers: Query<&ImageCopier>,
     mut images: ResMut<Assets<Image>>,
@@ -22,6 +23,7 @@ pub fn receive_images(
 )
 {
   for image_copier in image_copiers.iter() {
+      info!("Copying image data");
       if !image_copier.enabled() {
           continue;
       }
@@ -35,12 +37,14 @@ pub fn receive_images(
           // the future. Otherwise the application will freeze.
           let (tx, rx) = futures_intrusive::channel::shared::oneshot_channel();
           buffer_slice.map_async(MapMode::Read, move |result| {
-              tx.send(result).unwrap();
+            tx.send(result).unwrap();
           });
           render_device.poll(Maintain::Wait);
           rx.receive().await.unwrap().unwrap();
-          if let Some(image) = images.get_mut(&image_copier.dst_image) {
-              image.data = buffer_slice.get_mapped_range().to_vec();
+          if let Some(image) = images.get_mut(&image_copier.dst_image)
+          {
+            image.data = buffer_slice.get_mapped_range().to_vec();
+            info!("Copied data: {:?}", image.data.len());
           }
 
           image_copier.buffer.unmap();
@@ -55,7 +59,7 @@ pub struct ImageCopyPlugin;
 impl Plugin for ImageCopyPlugin {
     fn build(&self, app: &mut App) {
         let render_app = app
-            .add_systems(Update, receive_images)
+            .add_systems(Render, receive_images.after(RenderSet::Render).before(RenderSet::Cleanup))
             .sub_app_mut(RenderApp);
 
         render_app.add_systems(ExtractSchedule, image_copy_extract);
@@ -117,10 +121,11 @@ impl ImageCopier {
     }
 }
 
-pub fn image_copy_extract(mut commands: Commands, image_copiers: Extract<Query<&ImageCopier>>) {
-    commands.insert_resource(ImageCopiers(
-        image_copiers.iter().cloned().collect::<Vec<ImageCopier>>(),
-    ));
+pub fn image_copy_extract(mut commands: Commands, image_copiers: Extract<Query<&ImageCopier>>)
+{
+  commands.insert_resource(ImageCopiers(
+    image_copiers.iter().cloned().collect::<Vec<ImageCopier>>(),
+  ));
 }
 
 #[derive(Default)]
@@ -138,49 +143,50 @@ impl render_graph::Node for ImageCopyDriver
       let image_copiers = world.get_resource::<ImageCopiers>().unwrap();
       let gpu_images = world.get_resource::<RenderAssets<Image>>().unwrap();
 
-      for image_copier in image_copiers.iter() {
-          if !image_copier.enabled() {
-              continue;
-          }
+      for image_copier in image_copiers.iter()
+      {
+        if !image_copier.enabled()
+        {
+            continue;
+        }
 
-          let src_image = gpu_images.get(&image_copier.src_image).unwrap();
+        let src_image = gpu_images.get(&image_copier.src_image).unwrap();
 
-          let mut encoder = render_context
-              .render_device()
-              .create_command_encoder(&CommandEncoderDescriptor::default());
+        let mut encoder = render_context
+            .render_device()
+            .create_command_encoder(&CommandEncoderDescriptor::default());
 
-          let block_dimensions = src_image.texture_format.block_dimensions();
-          let block_size = src_image.texture_format.block_size(None).unwrap();
+        let size = src_image.texture.size();
+        let format = &src_image.texture_format;
+        let bytes_per_row = (size.width / format.block_dimensions().0) * format.block_size(None).unwrap();
 
-          let padded_bytes_per_row = RenderDevice::align_copy_bytes_per_row(
-              (src_image.size.x as usize / block_dimensions.0 as usize) * block_size as usize,
-          );
+        let padded_bytes_per_row = RenderDevice::align_copy_bytes_per_row(bytes_per_row as usize);
 
-          let texture_extent = Extent3d {
-              width: src_image.size.x as u32,
-              height: src_image.size.y as u32,
-              depth_or_array_layers: 1,
-          };
+        let texture_extent = Extent3d {
+            width: src_image.size.x as u32,
+            height: src_image.size.y as u32,
+            depth_or_array_layers: 1,
+        };
 
-          encoder.copy_texture_to_buffer(
-              src_image.texture.as_image_copy(),
-              ImageCopyBuffer {
-                  buffer: &image_copier.buffer,
-                  layout: ImageDataLayout {
-                      offset: 0,
-                      bytes_per_row: Some(
-                          std::num::NonZeroU32::new(padded_bytes_per_row as u32)
-                              .unwrap()
-                              .into(),
-                      ),
-                      rows_per_image: None,
-                  },
-              },
-              texture_extent,
-          );
+        encoder.copy_texture_to_buffer(
+          src_image.texture.as_image_copy(),
+          ImageCopyBuffer {
+            buffer: &image_copier.buffer,
+            layout: ImageDataLayout {
+              offset: 0,
+              bytes_per_row: Some(
+                std::num::NonZeroU32::new(padded_bytes_per_row as u32)
+                  .unwrap()
+                  .into(),
+              ),
+              rows_per_image: None,
+            },
+          },
+          texture_extent,
+        );
 
-          let render_queue = world.get_resource::<RenderQueue>().unwrap();
-          render_queue.submit(std::iter::once(encoder.finish()));
+        let render_queue = world.get_resource::<RenderQueue>().unwrap();
+        render_queue.submit(std::iter::once(encoder.finish()));
       }
 
       Ok(())

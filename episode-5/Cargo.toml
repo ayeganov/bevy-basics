@@ -12,6 +12,7 @@ rand = "0.8.5"
 wgpu = "0.17.1"
 pollster = "0.3"
 futures-intrusive = "0.5"
+bevy_headless = { path = "../bevy_headless"}
 
 # Enable a small amount of optimization in debug mode
 [profile.dev]

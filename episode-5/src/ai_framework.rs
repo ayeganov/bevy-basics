@@ -28,29 +28,28 @@ pub trait Sensing
 }
 
 
-fn save_image_to_disk(image: &Image, path: &Path) -> Result<(), image::ImageError>
+fn save_image_to_disk(image: &ImageBuffer<Rgba<u8>, Vec<u8>>, path: &Path) -> Result<(), image::ImageError>
 {
   // Get the image dimensions
-  let size = image.texture_descriptor.size;
-  let width = size.width;
-  let height = size.height;
+  let (width, height) = image.dimensions();
 
-  if image.data.len() == (width * height * 4) as usize
+  if image.len() == (width * height * 4) as usize
   {
-    let data = image.data.deref();
+//    let data = image.data.deref();
+//
+//    // This function assumes the image is in RGBA8 format.
+//    // If it's in a different format, conversion will be needed.
+//    let image_buffer = ImageBuffer::<Rgba<u8>, _>::from_raw(width, height, data)
+//        .ok_or(image::ImageError::Decoding(image::error::DecodingError::new(image::error::ImageFormatHint::Unknown, "Failed to create image buffer from raw data")))?;
 
-    // This function assumes the image is in RGBA8 format.
-    // If it's in a different format, conversion will be needed.
-    let image_buffer = ImageBuffer::<Rgba<u8>, _>::from_raw(width, height, data)
-        .ok_or(image::ImageError::Decoding(image::error::DecodingError::new(image::error::ImageFormatHint::Unknown, "Failed to create image buffer from raw data")))?;
-
-    image_buffer.save(path)
+    info!("Address of image buffer: {:?}", image.as_ptr());
+    image.save(path)
   }
   else
   {
     info!("Image width: {:?}", width);
     info!("Image height: {:?}", height);
-    info!("Image data length: {:?}", image.data.len());
+    info!("Image data length: {:?}", image.len());
     Err(image::ImageError::Parameter(image::error::ParameterError::from_kind(
         image::error::ParameterErrorKind::DimensionMismatch,
     )))
@@ -59,45 +58,40 @@ fn save_image_to_disk(image: &Image, path: &Path) -> Result<(), image::ImageErro
 }
 
 
-
 impl Sensing for VisionSensor
 {
   fn sense(&self, environment: Environment, images: &Res<Assets<Image>>) -> Option<Vec<f32>>
   {
-    let row_number = 100;
+    let row_number = 10;
     match environment
     {
       Environment::VisibleEnvironment =>
       {
-        if let Some(handle) = &self.visual_sensor
+        if let Some(image) = &self.visual_sensor
         {
-          if let Some(image) = images.get(handle)
+          let path = Path::new("/tmp/ai_agent.png");
+          match save_image_to_disk(&image.buffer, path)
           {
-            let path = Path::new("/tmp/ai_agent.png");
-            match save_image_to_disk(image, path)
-            {
-              Ok(_) => info!("Image saved to disk"),
-              Err(e) => error!("Error saving image to disk: {:?}", e),
-            }
-
-            image.texture_descriptor.label.as_ref().map(|label| info!("Label: {:?}", label));
-            let width = image.width() as usize;
-            let start = (row_number * width) as usize;
-            let end = start + width;
-            let region_is_valid = start < image.data.len() && end <= image.data.len();
-
-            if region_is_valid
-            {
-              let row_data = image.data[start..end].iter().map(|&b| b as f32).collect();
-              return Some(row_data);
-            }
-            else
-            {
-  //            println!("Invalid region for sensor: {:?}", self.visual_sensor);
-            }
+            Ok(_) => info!("Image saved to disk"),
+            Err(e) => error!("Error saving image to disk: {:?}", e),
           }
-          else {
-            println!("No image found for sensor: {:?}", self.visual_sensor);
+
+//            info!("image data: {:?}", image.data);
+
+//            image.texture_descriptor.label.as_ref().map(|label| info!("Label: {:?}", label));
+          let width = image.buffer.width() as usize;
+          let start = (row_number * width) as usize;
+          let end = start + width;
+          let region_is_valid = start < image.buffer.len() && end <= image.buffer.len();
+
+          if region_is_valid
+          {
+            let row_data = image.buffer.as_raw()[start..end].iter().map(|&b| b as f32).collect();
+            return Some(row_data);
+          }
+          else
+          {
+//            println!("Invalid region for sensor: {:?}", self.visual_sensor);
           }
           None
         }

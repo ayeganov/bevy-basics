@@ -2052,6 +2052,7 @@ version = "0.1.0"
 dependencies = [
  "bevy",
  "bevy_editor_pls",
+ "bevy_headless",
  "bevy_mod_picking",
  "futures-intrusive",
  "image",

@@ -8,7 +8,7 @@ use bevy::{
     render::{camera::{Camera, RenderTarget}, color::Color, texture::Image},
     transform::components::Transform, window::PrimaryWindow,
 };
-use bevy_headless::{CurrImageContainer, HeadlessPlugin, ImageExportSource};
+use bevy_headless::{CurrImageContainer, HeadlessPlugin, ImageSource};
 
 
 fn setup(
@@ -17,14 +17,13 @@ fn setup(
     mut scene_controller: ResMut<bevy_headless::SceneInfo>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
-    export_sources: ResMut<Assets<ImageExportSource>>,
+    mut export_sources: ResMut<Assets<ImageSource>>,
     windows: Query<&PrimaryWindow>,
 ) {
     let render_target = bevy_headless::setup_render_target(
       &mut commands,
       &mut images,
       &mut scene_controller,
-      export_sources,
     );
 
     // circular base
@@ -103,7 +102,7 @@ pub fn main()
 //      .add_plugins(DefaultPlugins)
       .add_plugins((
           HeadlessPlugin,
-          ScheduleRunnerPlugin::run_loop(std::time::Duration::from_secs_f64(1.0 / 6.0)),
+          ScheduleRunnerPlugin::run_loop(std::time::Duration::from_secs_f64(1.0 / 30.0)),
       ))
       .add_systems(Startup, setup)
       .add_systems(Update, save_img)

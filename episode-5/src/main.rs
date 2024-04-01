@@ -15,6 +15,9 @@ mod ai_framework;
 mod gpu_copy;
 
 use bevy::prelude::*;
+use bevy::app::ScheduleRunnerPlugin;
+
+use bevy_headless::{CurrImageContainer, HeadlessPlugin, ImageSource};
 
 //use debug::DebugPlugin;
 use asset_loader::AssetLoaderPlugin;
@@ -33,10 +36,13 @@ use ai_agent::AiAgentPlugin;
 use gpu_copy::image_copy::ImageCopyPlugin;
 
 
-fn main() {
+fn main()
+{
+  let (w, h) = (200, 50);
   App::new()
     // Bevy built-ins.
     .insert_resource(ClearColor(Color::rgb(0.1, 0.0, 0.15)))
+      .insert_resource(bevy_headless::SceneInfo::new(w, h))
     .insert_resource(AmbientLight {
       color: Color::default(),
       brightness: 0.75,
@@ -56,6 +62,10 @@ fn main() {
     .add_plugins(VisionPlugin)
     .add_plugins(AiAgentPlugin)
     .add_plugins(ImageCopyPlugin)
+      .add_plugins(HeadlessPlugin)
+//          HeadlessPlugin,
+//          ScheduleRunnerPlugin::run_loop(std::time::Duration::from_secs_f64(1.0 / 30.0)),
+//      ))
 //    .add_plugins(EditorPlugin::default())
     // .add_plugins(DebugPlugin)
     .run();

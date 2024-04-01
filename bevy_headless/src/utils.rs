@@ -1,5 +1,5 @@
 use bevy::{
-    asset::Assets,
+    asset::{Assets, Handle},
     ecs::{
         event::Event,
         system::{Commands, ResMut, Resource},
@@ -17,7 +17,7 @@ use std::{io::Cursor, ops::Deref};
 use base64::{engine::general_purpose, Engine};
 use image::{EncodableLayout, ImageBuffer, ImageOutputFormat, Pixel, Rgba, RgbaImage};
 
-use crate::{ImageExportBundle, ImageExportSource};
+use crate::{ImageExportBundle, ImageSource, ExportImage, ExportedImages};
 
 #[derive(Default, Resource)]
 pub struct CurrImage {
@@ -25,6 +25,7 @@ pub struct CurrImage {
     pub frame_id: u64,
     pub extension: String,
 }
+
 
 impl CurrImage {
     pub fn update_data<P, Container>(
@@ -88,45 +89,57 @@ impl SceneInfo {
     }
 }
 
+
 pub fn setup_render_target(
     commands: &mut Commands,
     images: &mut ResMut<Assets<Image>>,
     scene_controller: &mut ResMut<SceneInfo>,
-    mut export_sources: ResMut<Assets<ImageExportSource>>,
-) -> RenderTarget {
-    let size = Extent3d {
-        width: scene_controller.width,
-        height: scene_controller.height,
-        ..Default::default()
-    };
+    export_sources: &mut ResMut<Assets<ImageSource>>,
+    exported_images: &mut ResMut<ExportedImages>,
+) -> (RenderTarget, ExportImage)
+{
+  let size = Extent3d
+  {
+    width: scene_controller.width,
+    height: scene_controller.height,
+    ..Default::default()
+  };
 
-    // This is the texture that will be rendered to.
-    let mut render_target_image = Image {
-        texture_descriptor: TextureDescriptor {
-            label: None,
-            size,
-            dimension: TextureDimension::D2,
-            format: TextureFormat::Rgba8UnormSrgb,
-            mip_level_count: 1,
-            sample_count: 1,
-            usage: TextureUsages::COPY_SRC
-                | TextureUsages::COPY_DST
-                // ?? remove ??
-                | TextureUsages::TEXTURE_BINDING
-                | TextureUsages::RENDER_ATTACHMENT,
-            view_formats: &[],
-        },
-        ..Default::default()
-    };
-    render_target_image.resize(size);
-    let render_target_image_handle = images.add(render_target_image);
+  // This is the texture that will be rendered to.
+  let mut render_target_image = Image
+  {
+    texture_descriptor: TextureDescriptor
+    {
+      label: None,
+      size,
+      dimension: TextureDimension::D2,
+      format: TextureFormat::Rgba8UnormSrgb,
+      mip_level_count: 1,
+      sample_count: 1,
+      usage: TextureUsages::COPY_SRC
+          | TextureUsages::COPY_DST
+          // ?? remove ??
+          | TextureUsages::TEXTURE_BINDING
+          | TextureUsages::RENDER_ATTACHMENT,
+      view_formats: &[],
+    },
+    ..Default::default()
+  };
+  render_target_image.resize(size);
+  let render_target_image_handle = images.add(render_target_image);
 
-    commands.spawn(ImageExportBundle {
-        source: export_sources.add(render_target_image_handle.clone().into()),
-        ..Default::default()
-    });
+  let export_image = ExportImage::new(size);
+  let mut locked_images = exported_images.0.lock();
+  locked_images.push(export_image.clone());
 
-    RenderTarget::Image(render_target_image_handle)
+  log::info!("Setup exported images. It has {} images. Address of the container: {:?}", locked_images.len(), locked_images.as_ptr() as *const Vec<ExportImage>);
+
+  commands.spawn(ImageExportBundle {
+    source: export_sources.add(render_target_image_handle.clone().into()),
+    ..Default::default()
+  });
+
+  (RenderTarget::Image(render_target_image_handle), export_image)
 }
 
 fn base64_browser_img<P, Container>(img: &ImageBuffer<P, Container>) -> anyhow::Result<String>
