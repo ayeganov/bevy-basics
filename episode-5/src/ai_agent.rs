@@ -119,7 +119,7 @@ fn update_agents(agents_query: Query<(Entity, &AiAgent, &Sensor), (With<AiAgent>
 //        info!("Image address in update_agents: {:?}", &sensing.visual_sensor);
         if let Some(sensing) = sensing.sense(Environment::VisibleEnvironment{}, &images)
         {
-          println!("Sensing: {:?}", sensing);
+//          println!("Sensing: {:?}", sensing.len());
         }
         else
         {

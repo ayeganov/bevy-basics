@@ -29,7 +29,7 @@ const MISSILE_RADIUS: f32 = 0.3;
 const MISSILE_HEALTH: f32 = 1.0;
 const MISSILE_COLLISION_DAMAGE: f32 = 5.0;
 const MISSILE_SCALE: Vec3 = Vec3::splat(0.3);
-const NUM_SPACESHIPS: u16 = 50;
+const NUM_SPACESHIPS: u16 = 20;
 
 
 #[derive(Component, Debug)]

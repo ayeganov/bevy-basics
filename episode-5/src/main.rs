@@ -15,9 +15,8 @@ mod ai_framework;
 mod gpu_copy;
 
 use bevy::prelude::*;
-use bevy::app::ScheduleRunnerPlugin;
 
-use bevy_headless::{CurrImageContainer, HeadlessPlugin, ImageSource};
+use bevy_headless::GpuToCpuCpyPlugin;
 
 //use debug::DebugPlugin;
 use asset_loader::AssetLoaderPlugin;
@@ -62,10 +61,7 @@ fn main()
     .add_plugins(VisionPlugin)
     .add_plugins(AiAgentPlugin)
     .add_plugins(ImageCopyPlugin)
-      .add_plugins(HeadlessPlugin)
-//          HeadlessPlugin,
-//          ScheduleRunnerPlugin::run_loop(std::time::Duration::from_secs_f64(1.0 / 30.0)),
-//      ))
+    .add_plugins(GpuToCpuCpyPlugin)
 //    .add_plugins(EditorPlugin::default())
     // .add_plugins(DebugPlugin)
     .run();

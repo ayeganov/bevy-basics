@@ -6,7 +6,6 @@ use bevy::{
     render_resource::{
       Extent3d, TextureDescriptor, TextureDimension, TextureFormat, TextureUsages,
     },
-    camera::RenderTarget,
     renderer::RenderDevice,
     camera::Viewport,
     view::RenderLayers
@@ -19,7 +18,7 @@ use crate::schedule::InGameSet;
 use crate::ai_framework::Sensor;
 use crate::gpu_copy::image_copy::ImageCopier;
 
-use bevy_headless::{CurrImageContainer, HeadlessPlugin, ImageSource, ExportImage, ExportedImages};
+use bevy_headless::{ImageSource, ExportImage, ExportedImages};
 
 #[derive(Component, Debug, Default, Clone)]
 pub struct Vision
@@ -78,25 +77,6 @@ impl VisionObjectBundle
 }
 
 
-fn save_img(curr_img: Res<CurrImageContainer>)
-{
-  let curr_img = curr_img.0.lock();
-  if !curr_img.extension.is_empty()
-  {
-    let path = curr_img.create_path("out");
-    info!("path is {path}");
-    let img = curr_img.img_buffer.clone();
-
-    std::thread::spawn(move ||
-    {
-      if let Err(e) = img.save(path)
-      {
-        error!("Couldn't save image | {e:?}");
-      };
-    });
-  }
-}
-
 pub struct VisionPlugin;
 
 
@@ -110,7 +90,6 @@ impl Plugin for VisionPlugin
         .chain()
         .in_set(InGameSet::EntityUpdates),
     )
-      .add_systems(Update, save_img)
     .add_systems(Update, handle_vision_selection.run_if(on_event::<VisionSelected>()))
     .add_event::<VisionSelected>();
   }

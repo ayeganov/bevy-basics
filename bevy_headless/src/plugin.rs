@@ -1,12 +1,9 @@
 use std::sync::Arc;
 
-use crate::{
-    node::{ImageExportNode, NODE_NAME},
-    utils::CurrImage,
-};
+use crate::node::{ImageExportNode, NODE_NAME};
 use bevy::{
-    app::{App, Plugin, PluginGroup, PostUpdate},
-    asset::{Asset, Assets, AssetApp, Handle},
+    app::{App, Plugin, PostUpdate},
+    asset::{Asset, AssetApp, Handle},
     ecs::{
         bundle::Bundle,
         component::Component,
@@ -17,7 +14,6 @@ use bevy::{
             lifetimeless::SRes, Commands, Local, Query, Res, ResMut, Resource, SystemParamItem,
         },
     },
-    log::LogPlugin,
     reflect::{Reflect, TypeUuid},
     render::{
         camera::CameraUpdateSystem,
@@ -27,15 +23,11 @@ use bevy::{
         render_graph::RenderGraph,
         render_resource::{Buffer, BufferDescriptor, BufferUsages, Extent3d, MapMode},
         renderer::RenderDevice,
-        texture::{Image, ImagePlugin},
-        Render, RenderApp, RenderSet, ExtractSchedule, Extract
+        texture::Image, Render, RenderApp, RenderSet
     },
-    window::WindowPlugin,
-    DefaultPlugins,
 };
-use bytemuck::AnyBitPattern;
 use futures::channel::oneshot;
-use image::{EncodableLayout, ImageBuffer, Pixel, PixelWithColorType, Rgba};
+use image::{ImageBuffer, Rgba};
 
 use parking_lot::{Mutex, RwLock};
 use wgpu::Maintain;
@@ -75,6 +67,8 @@ pub struct ImageExportSettings {
     pub extension: String,
 }
 
+
+#[derive(Clone)]
 pub struct GpuImageExport {
     pub buffer: Buffer,
     pub source_handle: Handle<Image>,
@@ -177,7 +171,6 @@ pub struct ImageExportBundle
 fn save_buffer_as_resource(
   export_bundles: Query<(
       &Handle<ImageSource>,
-      &ImageExportSettings,
       &ImageExportStartFrame,
   )>,
   sources: Res<RenderAssets<ImageSource>>,
@@ -201,32 +194,34 @@ fn save_buffer_as_resource(
              locked_images.len(),
              locked_images.as_ptr() as *const Vec<ExportImage>);
 
+  let mut futures = Vec::new();
+
   let mut export_img_idx = 0;
-  for (source_handle, settings, start_frame) in &export_bundles
+  for (source_handle, _start_frame) in &export_bundles
   {
     if let Some(gpu_source) = sources.get(source_handle)
     {
-      let mut image_bytes = {
-        let slice = gpu_source.buffer.slice(..);
+      let slice = gpu_source.buffer.slice(..);
 
-        {
-          let (mapping_tx, mapping_rx) = oneshot::channel();
+      let (mapping_tx, mapping_rx) = oneshot::channel();
 
-          render_device.map_buffer(&slice, MapMode::Read, move |res| {
-              mapping_tx.send(res).unwrap();
-          });
+      render_device.map_buffer(&slice, MapMode::Read, move |res|
+      {
+        mapping_tx.send(res).unwrap();
+      });
 
-          render_device.poll(Maintain::Wait);
-          futures_lite::future::block_on(mapping_rx).unwrap().unwrap();
-        }
+      futures.push((slice, mapping_rx));
+    }
+  }
 
-        slice.get_mapped_range().to_vec()
-      };
-
+  render_device.poll(Maintain::Wait);
+  for ((slice, future), (source_handle, _)) in futures.iter_mut().zip(export_bundles.iter())
+  {
+    futures_lite::future::block_on(future).unwrap().unwrap();
+    let mut image_bytes = slice.get_mapped_range().to_vec();
+    if let Some(gpu_source) = sources.get(source_handle)
+    {
       gpu_source.buffer.unmap();
-
-      let settings = settings.clone();
-      let frame_id = *frame_id - start_frame.0 + 1;
       let (bytes_per_row, padded_bytes_per_row, source_size) = gpu_source.get_bps();
 
       if bytes_per_row != padded_bytes_per_row
@@ -246,7 +241,6 @@ fn save_buffer_as_resource(
       {
         let mut buffer = export_img.0.write();
         buffer.copy_from_slice(&image_bytes);
-//        export_img.buffer = ImageBuffer::from_raw(source_size.width, source_size.height, image_bytes).unwrap();
 //        log::info!("Address of buffer: {:?}", export_img.buffer.as_ptr() as *const _);
       }
       else
@@ -255,74 +249,15 @@ fn save_buffer_as_resource(
       }
 
       export_img_idx += 1;
-
-//            let extension = settings.extension.as_str();
-//            match extension {
-//                "exr" => {
-//                    capture_img_bytes::<Rgba<f32>>(
-//                        bytemuck::cast_slice(&image_bytes),
-//                        &source_size,
-//                        &mut curr_img,
-//                        frame_id,
-//                        extension,
-//                    );
-//                },
-//                _ => {
-//                    capture_img_bytes::<Rgba<u8>>(
-//                        &image_bytes,
-//                        &source_size,
-//                        &mut curr_img,
-//                        frame_id,
-//                        extension,
-//                    );
-//                },
-//            }
     }
   }
+
 }
 
-
-//fn copy_img_bytes<P: Pixel + PixelWithColorType>(
-//    image_bytes: &[P::Subpixel],
-//    source_size: &Extent3d,
-//    dest_image: &mut Image,
-//) where
-//    P::Subpixel: AnyBitPattern,
-//    [P::Subpixel]: EncodableLayout,
-//{
-//    match ImageBuffer::<P, _>::from_raw(source_size.width, source_size.height, image_bytes) {
-//        Some(image_bytes) => {
-//            curr_img.0.lock().update_data(frame_id, &image_bytes, extension.to_owned());
-//        },
-//        None => {
-//            log::error!("Failed creating image buffer for frame - '{frame_id}'");
-//        },
-//    }
-//}
-
-fn capture_img_bytes<P: Pixel + PixelWithColorType>(
-    image_bytes: &[P::Subpixel],
-    source_size: &Extent3d,
-    curr_img: &mut ResMut<CurrImageContainer>,
-    frame_id: u64,
-    extension: &str,
-) where
-    P::Subpixel: AnyBitPattern,
-    [P::Subpixel]: EncodableLayout,
-{
-    match ImageBuffer::<P, _>::from_raw(source_size.width, source_size.height, image_bytes) {
-        Some(image_bytes) => {
-            curr_img.0.lock().update_data(frame_id, &image_bytes, extension.to_owned());
-        },
-        None => {
-            log::error!("Failed creating image buffer for frame - '{frame_id}'");
-        },
-    }
-}
 
 /// Plugin enabling the generation of image sequences.
 #[derive(Default)]
-pub struct HeadlessPlugin;
+pub struct GpuToCpuCpyPlugin;
 
 
 #[derive(Debug, Hash, PartialEq, Eq, Clone, SystemSet)]
@@ -333,62 +268,44 @@ pub enum ImageExportSystems
 }
 
 
-impl Plugin for HeadlessPlugin {
-    fn build(&self, app: &mut App) {
-//        app.add_plugins(
-//            DefaultPlugins
-//                .set(ImagePlugin::default_nearest())
-////                .set(WindowPlugin {
-////                    primary_window: None,
-////                    exit_condition: bevy::window::ExitCondition::DontExit,
-////                    close_when_requested: false,
-////                    ..Default::default()
-////                })
-//                .disable::<LogPlugin>(),
-//        );
+impl Plugin for GpuToCpuCpyPlugin {
+    fn build(&self, app: &mut App)
+    {
+      let exported_images = ExportedImages::default();
 
-        // TODO:
-        let curr_image_container = CurrImageContainer::default();
-        let exported_images = ExportedImages::default();
+      app.insert_resource(exported_images.clone());
 
-        app.insert_resource(exported_images.clone());
-        app.insert_resource(curr_image_container.clone());
-
-        app.configure_sets(
-            PostUpdate,
-            (SetupImageExport, SetupImageExportFlush).chain().before(CameraUpdateSystem),
-        )
-        .register_type::<ImageSource>()
-        .init_asset::<ImageSource>()
-        .register_asset_reflect::<ImageSource>()
-        .add_plugins((
-          RenderAssetPlugin::<ImageSource>::default(),
-          ExtractComponentPlugin::<ImageExportSettings>::default(),
-        ))
-        .add_systems(
+      app.configure_sets(
           PostUpdate,
-          (
-            setup_exporters.in_set(SetupImageExport),
-            apply_deferred.in_set(SetupImageExportFlush),
-          ),
-        );
+          (SetupImageExport, SetupImageExportFlush).chain().before(CameraUpdateSystem),
+      )
+      .register_type::<ImageSource>()
+      .init_asset::<ImageSource>()
+      .register_asset_reflect::<ImageSource>()
+      .add_plugins((
+        RenderAssetPlugin::<ImageSource>::default(),
+        ExtractComponentPlugin::<ImageExportSettings>::default(),
+      ))
+      .add_systems(
+        PostUpdate,
+        (
+          setup_exporters.in_set(SetupImageExport),
+          apply_deferred.in_set(SetupImageExportFlush),
+        ),
+      );
 
-        let render_app = app.sub_app_mut(RenderApp);
+      let render_app = app.sub_app_mut(RenderApp);
 
-        render_app.insert_resource(curr_image_container);
-        render_app.insert_resource(exported_images);
+      render_app.insert_resource(exported_images);
 
-        render_app.add_systems(
-            Render,
-            save_buffer_as_resource.after(RenderSet::Render).before(RenderSet::Cleanup),
-        );
+      render_app.add_systems(
+          Render,
+          save_buffer_as_resource.after(RenderSet::Render).before(RenderSet::Cleanup),
+      );
 
-        let mut graph = render_app.world.get_resource_mut::<RenderGraph>().unwrap();
+      let mut graph = render_app.world.get_resource_mut::<RenderGraph>().unwrap();
 
-        graph.add_node(NODE_NAME, ImageExportNode);
-        graph.add_node_edge(CAMERA_DRIVER, NODE_NAME);
+      graph.add_node(NODE_NAME, ImageExportNode);
+      graph.add_node_edge(CAMERA_DRIVER, NODE_NAME);
     }
 }
-
-#[derive(Clone, Default, Resource)]
-pub struct CurrImageContainer(pub Arc<Mutex<CurrImage>>);

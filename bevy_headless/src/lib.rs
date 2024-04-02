@@ -4,7 +4,7 @@ mod plugin;
 mod utils;
 
 pub use plugin::{
-    CurrImageContainer, GpuImageExport, HeadlessPlugin, ImageExportBundle,
+    GpuImageExport, GpuToCpuCpyPlugin, ImageExportBundle,
     ImageExportSettings, ImageSource, ImageExportSystems, ExportImage, ExportedImages
 };
 

@@ -77,11 +77,11 @@ impl Sensing for VisionSensor
           let path = Path::new(filename.as_str());
 
           let buffer = image.0.read();
-          match save_image_to_disk(&buffer, path)
-          {
-            Ok(_) => info!("Image saved to disk"),
-            Err(e) => error!("Error saving image to disk: {:?}", e),
-          }
+//          match save_image_to_disk(&buffer, path)
+//          {
+//            Ok(_) => info!("Image saved to disk"),
+//            Err(e) => error!("Error saving image to disk: {:?}", e),
+//          }
 
 //            info!("image data: {:?}", image.data);
 
