@@ -90,22 +90,71 @@ impl SceneInfo {
 }
 
 
+fn next_power_of_2(n: u32) -> usize
+{
+  if n == 0
+  {
+    1
+  }
+  else
+  {
+    2_usize.pow((n - 1).next_power_of_two().trailing_zeros())
+  }
+}
+
+
+fn calculate_grid_dimensions(view_width: u32,
+                             view_height: u32,
+                             num_views: u32)
+  -> ((usize, usize), Vec<(u32, u32)>)
+{
+  let cols = (num_views as f64).sqrt().ceil() as u32;
+  let mut rows = (num_views as f64 / cols as f64).ceil() as u32;
+
+  while cols * (rows - 1) >= num_views
+  {
+      rows -= 1;
+  }
+
+  let initial_texture_width = cols * view_width;
+  let initial_texture_height = rows * view_height;
+
+  let texture_width = next_power_of_2(initial_texture_width);
+  let texture_height = next_power_of_2(initial_texture_height);
+
+  let mut positions: Vec<(u32, u32)> = Vec::with_capacity(num_views as usize);
+  for i in 0..num_views
+  {
+    let row = i / cols;
+    let col = i % cols;
+    let x = col * view_width;
+    let y = row * view_height;
+    positions.push((x, y));
+  }
+
+  ((texture_width, texture_height), positions)
+}
+
+
 pub fn setup_render_target(
     commands: &mut Commands,
     images: &mut ResMut<Assets<Image>>,
-    scene_controller: &mut ResMut<SceneInfo>,
     export_sources: &mut ResMut<Assets<ImageSource>>,
     exported_images: &mut ResMut<ExportedImages>,
-) -> (RenderTarget, ExportImage)
+    viewport_size: (u32, u32),
+    num_views: u32,
+) -> (RenderTarget, ExportImage, Vec<(u32, u32)>)
 {
+  let ((tex_width, tex_height), viewports) = calculate_grid_dimensions(viewport_size.0, viewport_size.1, num_views);
   let size = Extent3d
   {
-    width: scene_controller.width,
-    height: scene_controller.height,
+    width: tex_width as u32,
+    height: tex_height as u32,
     ..Default::default()
   };
 
-  // This is the texture that will be rendered to.
+  log::info!("Texture size: {:?}, viewport size: {:?}, num views: {}", size, viewport_size, num_views);
+
   let mut render_target_image = Image
   {
     texture_descriptor: TextureDescriptor
@@ -139,8 +188,9 @@ pub fn setup_render_target(
     ..Default::default()
   });
 
-  (RenderTarget::Image(render_target_image_handle), export_image)
+  (RenderTarget::Image(render_target_image_handle), export_image, viewports)
 }
+
 
 fn base64_browser_img<P, Container>(img: &ImageBuffer<P, Container>) -> anyhow::Result<String>
 where

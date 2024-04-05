@@ -268,44 +268,45 @@ pub enum ImageExportSystems
 }
 
 
-impl Plugin for GpuToCpuCpyPlugin {
-    fn build(&self, app: &mut App)
-    {
-      let exported_images = ExportedImages::default();
+impl Plugin for GpuToCpuCpyPlugin
+{
+  fn build(&self, app: &mut App)
+  {
+    let exported_images = ExportedImages::default();
 
-      app.insert_resource(exported_images.clone());
+    app.insert_resource(exported_images.clone());
 
-      app.configure_sets(
-          PostUpdate,
-          (SetupImageExport, SetupImageExportFlush).chain().before(CameraUpdateSystem),
-      )
-      .register_type::<ImageSource>()
-      .init_asset::<ImageSource>()
-      .register_asset_reflect::<ImageSource>()
-      .add_plugins((
-        RenderAssetPlugin::<ImageSource>::default(),
-        ExtractComponentPlugin::<ImageExportSettings>::default(),
-      ))
-      .add_systems(
+    app.configure_sets(
         PostUpdate,
-        (
-          setup_exporters.in_set(SetupImageExport),
-          apply_deferred.in_set(SetupImageExportFlush),
-        ),
-      );
+        (SetupImageExport, SetupImageExportFlush).chain().before(CameraUpdateSystem),
+    )
+    .register_type::<ImageSource>()
+    .init_asset::<ImageSource>()
+    .register_asset_reflect::<ImageSource>()
+    .add_plugins((
+      RenderAssetPlugin::<ImageSource>::default(),
+      ExtractComponentPlugin::<ImageExportSettings>::default(),
+    ))
+    .add_systems(
+      PostUpdate,
+      (
+        setup_exporters.in_set(SetupImageExport),
+        apply_deferred.in_set(SetupImageExportFlush),
+      ),
+    );
 
-      let render_app = app.sub_app_mut(RenderApp);
+    let render_app = app.sub_app_mut(RenderApp);
 
-      render_app.insert_resource(exported_images);
+    render_app.insert_resource(exported_images);
 
-      render_app.add_systems(
-          Render,
-          save_buffer_as_resource.after(RenderSet::Render).before(RenderSet::Cleanup),
-      );
+    render_app.add_systems(
+        Render,
+        save_buffer_as_resource.after(RenderSet::Render).before(RenderSet::Cleanup),
+    );
 
-      let mut graph = render_app.world.get_resource_mut::<RenderGraph>().unwrap();
+    let mut graph = render_app.world.get_resource_mut::<RenderGraph>().unwrap();
 
-      graph.add_node(NODE_NAME, ImageExportNode);
-      graph.add_node_edge(CAMERA_DRIVER, NODE_NAME);
-    }
+    graph.add_node(NODE_NAME, ImageExportNode);
+    graph.add_node_edge(CAMERA_DRIVER, NODE_NAME);
+  }
 }

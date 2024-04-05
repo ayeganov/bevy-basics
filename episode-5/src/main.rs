@@ -37,7 +37,7 @@ use gpu_copy::image_copy::ImageCopyPlugin;
 
 fn main()
 {
-  let (w, h) = (200, 50);
+  let (w, h) = (1280, 720);
   App::new()
     // Bevy built-ins.
     .insert_resource(ClearColor(Color::rgb(0.1, 0.0, 0.15)))

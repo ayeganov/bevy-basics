@@ -5,7 +5,7 @@ use std::{path::Path, ops::Deref};
 
 use rand::prelude::*;
 
-use crate::vision::Vision as VisionSensor;
+use crate::vision::{Vision as VisionSensor, VisionView};
 
 
 /// Sensors provide the limitations on what agents are able to interact with.
@@ -25,7 +25,7 @@ pub enum Environment
 
 pub trait Sensing
 {
-  fn sense(&self, environment: Environment, images: &Res<Assets<Image>>) -> Option<Vec<f32>>;
+  fn sense(&self, environment: Environment, vision_views: &VisionView) -> Option<Vec<f32>>;
 }
 
 
@@ -55,13 +55,12 @@ fn save_image_to_disk(image: &ImageBuffer<Rgba<u8>, Vec<u8>>, path: &Path) -> Re
         image::error::ParameterErrorKind::DimensionMismatch,
     )))
   }
-
 }
 
 
 impl Sensing for VisionSensor
 {
-  fn sense(&self, environment: Environment, images: &Res<Assets<Image>>) -> Option<Vec<f32>>
+  fn sense(&self, environment: Environment, vision_views: &VisionView) -> Option<Vec<f32>>
   {
     let mut rng = rand::thread_rng();
 
@@ -70,30 +69,30 @@ impl Sensing for VisionSensor
     {
       Environment::VisibleEnvironment =>
       {
-        if let Some(image) = &self.visual_sensor
+        if let Some(ref view_params) = self.visual_sensor
         {
+          let image = &vision_views.get_view(&view_params);
           let frame_id = rng.next_u32();
           let filename = format!("/tmp/{}/ai_agent_{}.png", self.id, frame_id);
           let path = Path::new(filename.as_str());
 
-          let buffer = image.0.read();
-//          match save_image_to_disk(&buffer, path)
-//          {
-//            Ok(_) => info!("Image saved to disk"),
-//            Err(e) => error!("Error saving image to disk: {:?}", e),
-//          }
+          match save_image_to_disk(&image, path)
+          {
+            Ok(_) => info!("Image saved to disk"),
+            Err(e) => error!("Error saving image to disk: {:?}", e),
+          }
 
 //            info!("image data: {:?}", image.data);
 
 //            image.texture_descriptor.label.as_ref().map(|label| info!("Label: {:?}", label));
-          let width = buffer.width() as usize;
+          let width = image.width() as usize;
           let start = (row_number * width) as usize;
           let end = start + width;
-          let region_is_valid = start < buffer.len() && end <= buffer.len();
+          let region_is_valid = start < image.len() && end <= image.len();
 
           if region_is_valid
           {
-            let row_data = buffer.as_raw()[start..end].iter().map(|&b| b as f32).collect();
+            let row_data = image.as_raw()[start..end].iter().map(|&b| b as f32).collect();
             return Some(row_data);
           }
           else
@@ -104,7 +103,7 @@ impl Sensing for VisionSensor
         }
         else
         {
-          println!("No handle found for sensor: {:?}", self.visual_sensor);
+          println!("No handle found for sensor: {:?}", self.id);
           None
         }
       },

@@ -1,5 +1,7 @@
+use std::marker::PhantomData;
+
 use bevy::{
-  core_pipeline::clear_color::ClearColorConfig,
+  core_pipeline::clear_color::{ClearColorConfig, self},
   prelude::*,
   math::vec4,
   render::{
@@ -9,7 +11,8 @@ use bevy::{
     renderer::RenderDevice,
     camera::Viewport,
     view::RenderLayers
-  }
+  },
+  ecs::system::SystemParam
 };
 
 use bevy_mod_picking::prelude::*;
@@ -19,6 +22,40 @@ use crate::ai_framework::Sensor;
 use crate::gpu_copy::image_copy::ImageCopier;
 
 use bevy_headless::{ImageSource, ExportImage, ExportedImages};
+use image::{SubImage, RgbaImage, GenericImageView, ImageBuffer, Rgba};
+
+
+#[derive(Debug, Default, Clone)]
+pub struct ViewParams
+{
+  pub x: u32,
+  pub y: u32,
+  pub width: u32,
+  pub height: u32,
+}
+
+
+#[derive(SystemParam)]
+pub struct VisionView<'w, 's>
+{
+  exported_images: Res<'w, ExportedImages>,
+  marker: PhantomData<&'s ()>,
+}
+
+
+impl<'w, 's> VisionView<'w, 's>
+{
+  pub fn get_view(&self, params: &ViewParams) -> ImageBuffer<Rgba<u8>, Vec<u8>>
+  {
+    let locked_images = self.exported_images.0.lock();
+//    info!("Get view exported images. It has {} images. Address of the container: {:?}", locked_images.len(), locked_images.as_ptr() as *const Vec<ExportImage>);
+    // TODO: must refactor the 0 index to actually fetch the correct image
+    let image = &locked_images[0].0.read();
+//    info!("Params for view: {:?}", params);
+    image.view(params.x, params.y, params.width, params.height).to_image()
+  }
+}
+
 
 #[derive(Component, Debug, Default, Clone)]
 pub struct Vision
@@ -26,7 +63,7 @@ pub struct Vision
   pub id: isize,
   pub cam_id: Option<Entity>,
   pub selected_cam_id: Option<Entity>,
-  pub visual_sensor: Option<ExportImage>,
+  pub visual_sensor: Option<ViewParams>,
 }
 
 
@@ -111,10 +148,8 @@ impl From<ListenerInput<Pointer<Click>>> for VisionSelected
 fn add_vision(mut images: ResMut<Assets<Image>>,
               mut visions: Query<(Entity, &mut Sensor), (With<Sensor>, Without<VisionSensing>)>,
               mut commands: Commands,
-              render_device: Res<RenderDevice>,
-    mut export_sources: ResMut<Assets<ImageSource>>,
-    mut exported_images: ResMut<ExportedImages>,
-    mut scene_controller: ResMut<bevy_headless::SceneInfo>,
+              mut export_sources: ResMut<Assets<ImageSource>>,
+              mut exported_images: ResMut<ExportedImages>,
 )
 {
   if visions.is_empty()
@@ -122,41 +157,56 @@ fn add_vision(mut images: ResMut<Assets<Image>>,
     return;
   }
 
-  for (vision_id, mut sensor) in visions.iter_mut()
+  let viewport_size = (50, 20);
+  let (render_target, destination, viewports) = bevy_headless::setup_render_target(
+    &mut commands,
+    &mut images,
+    &mut export_sources,
+    &mut exported_images,
+    viewport_size,
+    visions.iter().count() as u32,
+  );
+
+  let mut clear_color = Some(ClearColorConfig::Custom(Color::rgb(0.0, 0.0, 0.0)));
+  for ((vision_id, mut sensor), viewport) in visions.iter_mut().zip(viewports.iter())
   {
     match *sensor
     {
       Sensor::Vision(ref mut vision) =>
       {
         info!("Adding vision to id: {}", vision.id);
-        info!("Image address before replacement: {:?}", &vision.visual_sensor);
-//        let (_, destination) = create_vision_sensor(&mut commands, &render_device, &mut images);
 
-    let (render_target, destination) = bevy_headless::setup_render_target(
-      &mut commands,
-      &mut images,
-      &mut scene_controller,
-      &mut export_sources,
-      &mut exported_images,
-    );
-        let dims = destination.0.read().dimensions();
-        info!("Size of destination image: {:?}", dims);
-        vision.visual_sensor = Some(destination);
+        vision.visual_sensor = Some(ViewParams
+        {
+          x: viewport.0,
+          y: viewport.1,
+          width: viewport_size.0,
+          height: viewport_size.1,
+        });
 
-//        info!("Image address after replacement: {:?}", &vision.visual_sensor);
+        let current_cc = match clear_color.take()
+        {
+          Some(cc) => cc,
+          None => ClearColorConfig::None
+        };
 
         let camera_id = commands.spawn((Camera3dBundle
         {
           camera_3d: Camera3d
           {
-            clear_color: ClearColorConfig::Custom(Color::rgb(0.0, 0.0, 0.0)),
+            clear_color: current_cc,
             ..default()
           },
           camera: Camera
           {
             // render before the "main pass" camera
-            order: 1,
-            target: render_target,
+            order: vision.id,
+            target: render_target.clone(),
+            viewport: Some(Viewport {
+              physical_position: UVec2::new(viewport.0, viewport.1),
+              physical_size: UVec2::new(viewport_size.0, viewport_size.1),
+              ..default()
+            }),
             ..default()
           },
           transform: Transform::from_translation(Vec3::new(0.0, -1.0, -7.0))
