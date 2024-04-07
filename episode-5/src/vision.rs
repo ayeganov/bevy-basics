@@ -169,7 +169,7 @@ fn add_vision(mut images: ResMut<Assets<Image>>,
   );
 
   let mut clear_color = Some(ClearColorConfig::Custom(Color::rgb(0.0, 0.0, 0.0)));
-  for ((vision_id, mut sensor), viewport) in visions.iter_mut().zip(viewports.iter())
+  for ((vision_id, mut sensor), viewport_pos) in visions.iter_mut().zip(viewports.iter())
   {
     match *sensor
     {
@@ -179,8 +179,8 @@ fn add_vision(mut images: ResMut<Assets<Image>>,
 
         vision.visual_sensor = Some(ViewParams
         {
-          x: viewport.0,
-          y: viewport.1,
+          x: viewport_pos.0,
+          y: viewport_pos.1,
           width: viewport_size.0,
           height: viewport_size.1,
         });
@@ -204,7 +204,7 @@ fn add_vision(mut images: ResMut<Assets<Image>>,
             order: vision.id,
             target: render_target.clone(),
             viewport: Some(Viewport {
-              physical_position: UVec2::new(viewport.0, viewport.1),
+              physical_position: UVec2::new(viewport_pos.0, viewport_pos.1),
               physical_size: UVec2::new(viewport_size.0, viewport_size.1),
               ..default()
             }),

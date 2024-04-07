@@ -73,7 +73,7 @@ impl SceneInfo {
 }
 
 
-fn next_power_of_2(n: u32) -> usize
+fn next_power_of_2(n: usize) -> usize
 {
   if n == 0
   {
@@ -99,11 +99,32 @@ fn calculate_grid_dimensions(view_width: u32,
       rows -= 1;
   }
 
-  let initial_texture_width = cols * view_width;
-  let initial_texture_height = rows * view_height;
+  let initial_texture_width = (cols * view_width) as usize;
+  let initial_texture_height = (rows * view_height) as usize;
 
-  let texture_width = next_power_of_2(initial_texture_width);
-  let texture_height = next_power_of_2(initial_texture_height);
+  let texture_width = {
+    let is_already_power_of_2 = initial_texture_width & (initial_texture_width - 1) == 0;
+    if is_already_power_of_2
+    {
+      initial_texture_width
+    }
+    else
+    {
+      next_power_of_2(initial_texture_width)
+    }
+  };
+
+  let texture_height = {
+    let is_already_power_of_2 = initial_texture_height & (initial_texture_height - 1) == 0;
+    if is_already_power_of_2
+    {
+      initial_texture_height
+    }
+    else
+    {
+      next_power_of_2(initial_texture_height)
+    }
+  };
 
   let mut positions: Vec<(u32, u32)> = Vec::with_capacity(num_views as usize);
   for i in 0..num_views
