@@ -35,11 +35,9 @@ use ai_agent::AiAgentPlugin;
 
 fn main()
 {
-  let (w, h) = (1280, 720);
   App::new()
     // Bevy built-ins.
     .insert_resource(ClearColor(Color::rgb(0.1, 0.0, 0.15)))
-      .insert_resource(gpu_copy::SceneInfo::new(w, h))
     .insert_resource(AmbientLight {
       color: Color::default(),
       brightness: 0.75,

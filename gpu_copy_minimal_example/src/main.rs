@@ -6,25 +6,35 @@ use bevy::{
     ecs::system::{Commands, Res, ResMut},
     math::Vec3,
     render::{camera::{Camera, RenderTarget}, color::Color, texture::Image},
-    transform::components::Transform, window::PrimaryWindow,
+    transform::components::Transform
 };
-use gpu_copy::{CurrImageContainer, HeadlessPlugin, ImageSource};
+use gpu_copy::{setup_render_target, ImageSource, GpuToCpuCpyPlugin, ExportedImages};
 
 
 fn setup(
     mut commands: Commands,
     mut images: ResMut<Assets<Image>>,
-    mut scene_controller: ResMut<gpu_copy::SceneInfo>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut export_sources: ResMut<Assets<ImageSource>>,
-    windows: Query<&PrimaryWindow>,
+    mut exported_images: ResMut<ExportedImages>,
 ) {
-    let render_target = gpu_copy::setup_render_target(
+    let viewport_size = (1280, 720);
+    let (render_target, _) = setup_render_target(
+      &"minimal_example".to_string(),
       &mut commands,
       &mut images,
-      &mut scene_controller,
+      &mut export_sources,
+      &mut exported_images,
+      viewport_size,
+      1
     );
+
+    match std::fs::create_dir("out")
+    {
+      Ok(_) => {}
+      Err(e) => log::error!("Couldn't create directory | {e:?}"),
+    }
 
     // circular base
     commands.spawn(PbrBundle {
@@ -66,14 +76,16 @@ fn setup(
 }
 
 
-fn save_img(curr_img: Res<CurrImageContainer>)
+fn save_img(exported_images: Res<ExportedImages>,
+)
 {
-  let curr_img = curr_img.0.lock();
-  if !curr_img.extension.is_empty()
+  let locked_images = exported_images.0.lock();
+  if let Some(image) = &locked_images.get(&"minimal_example".to_string())
   {
-    let path = curr_img.create_path("out");
+    let image = &image.0.read();
+    let path = format!("out/minimal_example_{}.png", image.frame_id);
     log::info!("path is {path}");
-    let img = curr_img.img_buffer.clone();
+    let img = image.img_buffer.clone();
 
     std::thread::spawn(move ||
     {
@@ -99,9 +111,9 @@ pub fn main()
   Engine::new()
       .insert_resource(gpu_copy::SceneInfo::new(w, h))
       .insert_resource(ClearColor(Color::rgb_u8(0, 0, 0)))
-//      .add_plugins(DefaultPlugins)
+      .add_plugins(DefaultPlugins)
       .add_plugins((
-          HeadlessPlugin,
+          GpuToCpuCpyPlugin,
           ScheduleRunnerPlugin::run_loop(std::time::Duration::from_secs_f64(1.0 / 30.0)),
       ))
       .add_systems(Startup, setup)

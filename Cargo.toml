@@ -7,7 +7,7 @@ members = [
   "episode-4",
   "episode-5",
   "gpu_copy",
-  "minimal_example",
+  "gpu_copy_minimal_example",
 ]
 
 package.rust-version = "1.75.0"

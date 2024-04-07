@@ -5,10 +5,6 @@ use bevy::{
   prelude::*,
   math::vec4,
   render::{
-    render_resource::{
-      Extent3d, TextureDescriptor, TextureDimension, TextureFormat, TextureUsages,
-    },
-    renderer::RenderDevice,
     camera::Viewport,
     view::RenderLayers
   },
@@ -112,7 +108,6 @@ impl VisionObjectBundle
       {
         vision.id = id;
       },
-      _ => {}
     }
     default
   }
@@ -232,7 +227,6 @@ fn add_vision(mut images: ResMut<Assets<Image>>,
         commands.entity(vision_id).push_children(&[camera_id]);
         commands.entity(vision_id).insert(VisionSensing{});
       }
-      _ => {}
     }
   }
 }
