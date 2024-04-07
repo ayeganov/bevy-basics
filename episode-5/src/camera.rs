@@ -24,7 +24,7 @@ impl Plugin for CameraPlugin
     app.init_resource::<VisibleRange>()
        .add_systems(Startup, spawn_camera)
        .add_event::<WindowResized>()
-       .add_systems(Startup, update_visible_range.after(spawn_camera))
+       .add_systems(PostStartup, update_visible_range)
        .add_systems(PreUpdate, update_visible_range.run_if(on_event::<WindowResized>()));
   }
 }
@@ -43,33 +43,37 @@ fn spawn_camera(mut commands: Commands)
 }
 
 
-fn update_visible_range(window_query: Query<&Window>,
-                        camera_query: Query<&Projection, With<MainCamera>>,
-                        mut visible_range: ResMut<VisibleRange>,
+pub fn update_visible_range(window_query: Query<&Window>,
+                            camera_query: Query<&Projection, With<MainCamera>>,
+                            mut visible_range: ResMut<VisibleRange>,
 )
 {
   info!("Window has been resized!");
 
-  let window = window_query.single();
-  let aspect_ratio = window.width() as f32 / window.height() as f32;
-
-  if let Ok(projection) = camera_query.get_single()
+  for window in window_query.iter()
   {
-    if let Projection::Perspective(perspective_projection) = projection
+    if window.title == "Vision" { continue; };
+
+    let aspect_ratio = window.width() as f32 / window.height() as f32;
+
+    if let Ok(projection) = camera_query.get_single()
     {
-      let fov = perspective_projection.fov;
-      let visible_height = 2.0 * (CAMERA_DISTANCE * (fov / 2.0).tan());
-      let visible_width = visible_height * aspect_ratio;
+      if let Projection::Perspective(perspective_projection) = projection
+      {
+        let fov = perspective_projection.fov;
+        let visible_height = 2.0 * (CAMERA_DISTANCE * (fov / 2.0).tan());
+        let visible_width = visible_height * aspect_ratio;
 
-      // Calculate spawn ranges based on the visible area
-      visible_range.x_range = (-visible_width / 2.0) .. (visible_width / 2.0);
-      visible_range.z_range = (-visible_height / 2.0) .. (visible_height / 2.0);
-      info!("visible range: {:?}", visible_range);
+        // Calculate spawn ranges based on the visible area
+        visible_range.x_range = (-visible_width / 2.0) .. (visible_width / 2.0);
+        visible_range.z_range = (-visible_height / 2.0) .. (visible_height / 2.0);
+        info!("visible range: {:?}", visible_range);
+      }
     }
-  }
-  else
-  {
-    visible_range.x_range = -30.0 .. 30.0;
-    visible_range.z_range = -30.0 .. 30.0;
+    else
+    {
+      visible_range.x_range = -30.0 .. 30.0;
+      visible_range.z_range = -30.0 .. 30.0;
+    }
   }
 }

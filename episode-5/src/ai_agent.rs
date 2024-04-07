@@ -1,35 +1,133 @@
-use bevy::{prelude::*};
-use rand::Rng;
+use bevy::prelude::*;
 
+use rand::prelude::*;
+
+use crate::ai_framework::Environment;
 use crate::movement::Velocity;
+use crate::ai_framework::Sensor;
+use crate::ai_framework::Sensing;
+use crate::vision::VisionView;
 
 const ROTATION_SPEED: f32 = 2.5;
 const SPEED: f32 = 15.0;
 
 
-#[derive(Component, Debug)]
+/// What is the purpose of the agent - to make decisions and affect other
+/// agents/environments
+#[derive(Component, Debug, Default)]
 pub struct AiAgent;
 
 
-pub struct AiAgentPlugin;
+/// What is the purpose of an environment - to provide RESOURCES and SENSORY
+/// data
+#[derive(Component, Debug, Default)]
+pub struct AiEnvironment;
 
 
-#[derive(Component, Debug, Clone, Default, Reflect)]
+/// Universal information processor - chooses what sensory information to
+/// process and produces an array of outputs to drive the agents behavior
+#[derive(Component, Debug, Clone, Reflect)]
 #[reflect(Component, Default)]
-pub enum AgentType
+pub enum Brain
 {
-  #[default]
-  Random,
+  Random(RandomBrain),
   Human,
   Neat
 }
+
+
+#[derive(Component, Debug, Clone, Reflect)]
+#[reflect(Component, Default)]
+pub struct RandomBrain
+{
+
+}
+
+
+impl Default for Brain
+{
+  fn default() -> Self
+  {
+    Brain::Random(Default::default())
+  }
+}
+
+
+impl Default for RandomBrain
+{
+  fn default() -> Self
+  {
+    RandomBrain {}
+  }
+}
+
+
+pub trait AgentBrain
+{
+  // TODO: How to collect inputs?
+  fn process_input(&mut self, sensations: Vec<f32>) -> Vec<f32>;
+}
+
+
+impl AgentBrain for Brain
+{
+  fn process_input(& mut self, sensations: Vec<f32>) -> Vec<f32>
+  {
+    match self
+    {
+      Brain::Random(brain) => brain.process_input(sensations),
+      Brain::Human => vec![],
+      Brain::Neat => vec![]
+    }
+  }
+}
+
+
+impl AgentBrain for RandomBrain
+{
+  fn process_input(& mut self, sensations: Vec<f32>) -> Vec<f32>
+  {
+    vec![]
+  }
+}
+
+
+pub struct AiAgentPlugin;
 
 
 impl Plugin for AiAgentPlugin
 {
   fn build(&self, app: &mut App)
   {
-    app.add_systems(Update, make_decisions);
+    app.add_systems(Update, (make_decisions, update_agents));
+  }
+}
+
+
+fn update_agents(agents_query: Query<(Entity, &AiAgent, &Sensor), (With<AiAgent>, With<Sensor>)>,
+                 sensors_query: Query<(Entity, &Sensor), With<Sensor>>,
+                 vision_view: VisionView,
+                 time: Res<Time>,
+)
+{
+  for (sensor_ent, sensor) in sensors_query.iter()
+  {
+    match sensor
+    {
+      Sensor::Vision(sensing) =>
+      {
+//        info!("Id of vision: {}", sensing.id);
+//        info!("Image address in update_agents: {:?}", &sensing.visual_sensor);
+        if let Some(sensing) = sensing.sense(Environment::VisibleEnvironment{}, &vision_view)
+        {
+//          println!("Sensing: {:?}", sensing.len());
+        }
+        else
+        {
+//          println!("No sensing");
+        }
+      }
+    }
   }
 }
 

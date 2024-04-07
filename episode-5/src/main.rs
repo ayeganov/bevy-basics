@@ -11,8 +11,11 @@ mod spaceship;
 mod state;
 mod vision;
 mod ai_agent;
+mod ai_framework;
 
 use bevy::prelude::*;
+
+use gpu_copy::GpuToCpuCpyPlugin;
 
 //use debug::DebugPlugin;
 use asset_loader::AssetLoaderPlugin;
@@ -30,7 +33,8 @@ use vision::VisionPlugin;
 use ai_agent::AiAgentPlugin;
 
 
-fn main() {
+fn main()
+{
   App::new()
     // Bevy built-ins.
     .insert_resource(ClearColor(Color::rgb(0.1, 0.0, 0.15)))
@@ -52,6 +56,7 @@ fn main() {
     .add_plugins(DefaultPickingPlugins)
     .add_plugins(VisionPlugin)
     .add_plugins(AiAgentPlugin)
+    .add_plugins(GpuToCpuCpyPlugin)
 //    .add_plugins(EditorPlugin::default())
     // .add_plugins(DebugPlugin)
     .run();

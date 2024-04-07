@@ -1,28 +1,70 @@
+use std::marker::PhantomData;
+
 use bevy::{
   core_pipeline::clear_color::ClearColorConfig,
   prelude::*,
   math::vec4,
   render::{
-    render_resource::{
-      Extent3d, TextureDescriptor, TextureDimension, TextureFormat, TextureUsages,
-    },
-    camera::RenderTarget,
     camera::Viewport,
     view::RenderLayers
-  }
+  },
+  ecs::system::SystemParam
 };
 
 use bevy_mod_picking::prelude::*;
 
 use crate::schedule::InGameSet;
+use crate::ai_framework::Sensor;
 
-#[derive(Component, Debug, Default)]
+use gpu_copy::{ImageSource, ExportedImages};
+use image::{GenericImageView, ImageBuffer, Rgba};
+
+
+const VISION: &str = "Vision";
+
+#[derive(Debug, Default, Clone)]
+pub struct ViewParams
+{
+  pub x: u32,
+  pub y: u32,
+  pub width: u32,
+  pub height: u32,
+}
+
+
+#[derive(SystemParam)]
+pub struct VisionView<'w, 's>
+{
+  exported_images: Res<'w, ExportedImages>,
+  marker: PhantomData<&'s ()>,
+}
+
+
+impl<'w, 's> VisionView<'w, 's>
+{
+  pub fn get_view(&self, params: &ViewParams) -> (ImageBuffer<Rgba<u8>, Vec<u8>>, u64)
+  {
+    let locked_images = self.exported_images.0.lock();
+    if let Some(image) = &locked_images.get(VISION)
+    {
+      let image = &image.0.read();
+      (image.img_buffer.view(params.x, params.y, params.width, params.height).to_image(), image.frame_id)
+    }
+    else
+    {
+      (ImageBuffer::new(1, 1), 0)
+    }
+  }
+}
+
+
+#[derive(Component, Debug, Default, Clone)]
 pub struct Vision
 {
   pub id: isize,
   pub cam_id: Option<Entity>,
   pub selected_cam_id: Option<Entity>,
-  pub visual_sensor: Handle<Image>,
+  pub visual_sensor: Option<ViewParams>,
 }
 
 
@@ -33,10 +75,11 @@ pub struct VisionSensing;
 #[derive(Component, Debug)]
 pub struct VisionCam;
 
+
 #[derive(Bundle)]
 pub struct VisionObjectBundle
 {
-  pub vision: Vision,
+  vision: Sensor,
   pub click_event: On::<Pointer<Click>>
 }
 
@@ -47,7 +90,7 @@ impl Default for VisionObjectBundle
   {
     Self
     {
-      vision: Vision { id: 1, ..default() },
+      vision: Sensor::Vision(Vision::default()),
       click_event: On::<Pointer<Click>>::send_event::<VisionSelected>(),
     }
   }
@@ -59,7 +102,13 @@ impl VisionObjectBundle
   pub fn new(id: isize) -> Self
   {
     let mut default = VisionObjectBundle::default();
-    default.vision.id = id;
+    match default.vision
+    {
+      Sensor::Vision(ref mut vision) =>
+      {
+        vision.id = id;
+      },
+    }
     default
   }
 }
@@ -97,78 +146,89 @@ impl From<ListenerInput<Pointer<Click>>> for VisionSelected
 
 
 fn add_vision(mut images: ResMut<Assets<Image>>,
-              mut visions: Query<(Entity, &mut Vision), (With<Vision>, Without<VisionSensing>)>,
+              mut visions: Query<(Entity, &mut Sensor), (With<Sensor>, Without<VisionSensing>)>,
               mut commands: Commands,
+              mut export_sources: ResMut<Assets<ImageSource>>,
+              mut exported_images: ResMut<ExportedImages>,
 )
 {
-  for (vision_id, mut vision) in visions.iter_mut()
+  if visions.is_empty()
   {
-    info!("Adding vision to id: {}", vision.id);
-    vision.visual_sensor = images.add(create_vision_sensor());
-    let camera_id = commands.spawn((Camera3dBundle
-    {
-      camera_3d: Camera3d
-      {
-        clear_color: ClearColorConfig::None,
-        ..default()
-      },
-      camera: Camera
-      {
-        // render before the "main pass" camera
-        order: 1,
-        target: RenderTarget::Image(vision.visual_sensor.clone()),
-        ..default()
-      },
-      transform: Transform::from_translation(Vec3::new(0.0, -1.0, -7.0))
-          .looking_at(Vec3::new(0.0, -1.0, -30.), Vec3::Y),
-      projection: PerspectiveProjection
-      {
-        far: 500.0,
-        ..default()
-      }.into(),
-      ..default()
-    },
-    )).id();
-
-    vision.cam_id = Some(camera_id);
-
-    commands.entity(camera_id).insert(VisionCam{});
-    commands.entity(vision_id).push_children(&[camera_id]);
-    commands.entity(vision_id).insert(VisionSensing{});
+    return;
   }
-}
 
+  let viewport_size = (200, 50);
+  let (render_target, viewports) = gpu_copy::setup_render_target(
+    &VISION.to_string(),
+    &mut commands,
+    &mut images,
+    &mut export_sources,
+    &mut exported_images,
+    viewport_size,
+    visions.iter().count() as u32,
+  );
 
-fn create_vision_sensor() -> Image
-{
-  let size = Extent3d {
-    width: 50,
-    height: 200,
-    ..default()
-  };
-
-  // This is the texture that will be rendered to.
-  let mut image = Image
+  let mut clear_color = Some(ClearColorConfig::Custom(Color::rgb(0.0, 0.0, 0.0)));
+  for ((vision_id, mut sensor), viewport_pos) in visions.iter_mut().zip(viewports.iter())
   {
-    texture_descriptor: TextureDescriptor {
-      label: None,
-      size,
-      dimension: TextureDimension::D2,
-      format: TextureFormat::Bgra8UnormSrgb,
-      mip_level_count: 1,
-      sample_count: 1,
-      usage: TextureUsages::TEXTURE_BINDING
-          | TextureUsages::COPY_DST
-          | TextureUsages::RENDER_ATTACHMENT,
-      view_formats: &[],
-    },
-    ..default()
-  };
+    match *sensor
+    {
+      Sensor::Vision(ref mut vision) =>
+      {
+        info!("Adding vision to id: {}", vision.id);
 
-  // fill image.data with zeroes
-  image.resize(size);
+        vision.visual_sensor = Some(ViewParams
+        {
+          x: viewport_pos.0,
+          y: viewport_pos.1,
+          width: viewport_size.0,
+          height: viewport_size.1,
+        });
 
-  image
+        let current_cc = match clear_color.take()
+        {
+          Some(cc) => cc,
+          None => ClearColorConfig::None
+        };
+
+        let camera_id = commands.spawn((Camera3dBundle
+        {
+          camera_3d: Camera3d
+          {
+            clear_color: current_cc,
+            ..default()
+          },
+          camera: Camera
+          {
+            // render before the "main pass" camera
+            order: vision.id,
+            target: render_target.clone(),
+            viewport: Some(Viewport {
+              physical_position: UVec2::new(viewport_pos.0, viewport_pos.1),
+              physical_size: UVec2::new(viewport_size.0, viewport_size.1),
+              ..default()
+            }),
+            ..default()
+          },
+          transform: Transform::from_translation(Vec3::new(0.0, -1.0, -7.0))
+              .looking_at(Vec3::new(0.0, -1.0, -30.), Vec3::Y),
+          projection: PerspectiveProjection
+          {
+            far: 500.0,
+            ..default()
+          }.into(),
+          ..default()
+        },
+        )).id();
+
+        vision.cam_id = Some(camera_id);
+
+        commands.entity(camera_id).insert(VisionCam{});
+        commands.entity(vision_id).push_children(&[camera_id]);
+        commands.entity(vision_id).insert(VisionSensing{});
+      }
+    }
+  }
 }
 
 
@@ -220,7 +280,6 @@ fn attach_vision_camera(commands: &mut Commands,
     {
       // render before the "main pass" camera
       order: vision.id,
-//      target: RenderTarget::Image(vision.visual_sensor.clone()),
       viewport: Some(Viewport {
         physical_position: UVec2::new(0, 0),
         physical_size: UVec2::new(256, 256),

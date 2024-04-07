@@ -1,0 +1,11 @@
+[package]
+name = "minimal"
+version = "0.1.0"
+edition = "2021"
+rust-version.workspace = true
+
+[dependencies]
+bevy.workspace = true
+gpu_copy = { path = "../gpu_copy"}
+log.workspace = true
+pretty_env_logger.workspace = true
