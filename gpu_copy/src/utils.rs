@@ -1,5 +1,5 @@
 use bevy::{
-    asset::{Assets, Handle},
+    asset::Assets,
     ecs::{
         event::Event,
         system::{Commands, ResMut, Resource},
@@ -17,66 +17,49 @@ use std::{io::Cursor, ops::Deref};
 use base64::{engine::general_purpose, Engine};
 use image::{EncodableLayout, ImageBuffer, ImageOutputFormat, Pixel, Rgba, RgbaImage};
 
-use crate::{ImageExportBundle, ImageSource, ExportImage, ExportedImages};
+use crate::{ImageExportBundle, ImageSource, ExportImage, ExportedImages, ImageExportSettings};
 
-#[derive(Default, Resource)]
-pub struct CurrImage {
-    pub img_buffer: ImageBuffer<Rgba<u8>, Vec<u8>>,
-    pub frame_id: u64,
-    pub extension: String,
+
+#[derive(Clone, Default, Debug)]
+pub struct ImageWrapper
+{
+  pub img_buffer: ImageBuffer<Rgba<u8>, Vec<u8>>,
+  pub frame_id: u64,
 }
 
 
-impl CurrImage {
-    pub fn update_data<P, Container>(
-        &mut self,
-        frame_id: u64,
-        image_bytes: &ImageBuffer<P, Container>,
-        extension: String,
-    ) where
-        P: Pixel + image::PixelWithColorType,
-        [P::Subpixel]: EncodableLayout,
-        Container: Deref<Target = [P::Subpixel]>,
+impl ImageWrapper
+{
+  pub fn new(size: Extent3d) -> Self
+  {
+    Self
     {
-        self.frame_id = frame_id;
-
-        self.extension = extension;
-
-        let (w, h) = image_bytes.dimensions();
-        if let Some(rgba_img_buff) = RgbaImage::from_raw(w, h, image_bytes.as_bytes().to_owned()) {
-            self.img_buffer = rgba_img_buff;
-        } else {
-            log::error!("Error updating curr image image buffer");
-        };
+      img_buffer: ImageBuffer::new(size.width, size.height),
+      frame_id: 0,
     }
-
-    pub fn create_path(&self, dir: &str) -> String {
-        // shouldn't be in loop, remove later
-        std::fs::create_dir_all(dir).expect("Output path could not be created");
-
-        format!("{dir}/{:06}.{}", self.frame_id, self.extension)
-    }
-
-    pub fn to_web_base64(&self) -> anyhow::Result<String> {
-        base64_browser_img(&self.img_buffer)
-    }
-
-    pub fn dimensions(&self) -> [u32; 2] {
-        let (w, h) = self.img_buffer.dimensions();
-        [w, h]
-    }
-
-    pub fn aspect_ratio(&self) -> [u32; 2] {
-        let (_w, _h) = self.img_buffer.dimensions();
-        // TODO: calculate later
-        [16, 9]
-    }
+  }
 }
+
+
+impl ImageWrapper
+{
+  pub fn update_data(
+    &mut self,
+    frame_id: u64,
+    image_bytes: &Vec<u8>,
+  )
+  {
+    self.frame_id = frame_id;
+    self.img_buffer.copy_from_slice(image_bytes);
+  }
+}
+
 
 #[derive(Debug, Default, Resource, Event)]
-pub struct SceneInfo {
-    width: u32,
-    height: u32,
+pub struct SceneInfo
+{
+  width: u32,
+  height: u32,
 }
 
 impl SceneInfo {
@@ -137,13 +120,14 @@ fn calculate_grid_dimensions(view_width: u32,
 
 
 pub fn setup_render_target(
+    target_name: &String,
     commands: &mut Commands,
     images: &mut ResMut<Assets<Image>>,
     export_sources: &mut ResMut<Assets<ImageSource>>,
     exported_images: &mut ResMut<ExportedImages>,
     viewport_size: (u32, u32),
     num_views: u32,
-) -> (RenderTarget, ExportImage, Vec<(u32, u32)>)
+) -> (RenderTarget, Vec<(u32, u32)>)
 {
   let ((tex_width, tex_height), viewports) = calculate_grid_dimensions(viewport_size.0, viewport_size.1, num_views);
   let size = Extent3d
@@ -167,7 +151,6 @@ pub fn setup_render_target(
       sample_count: 1,
       usage: TextureUsages::COPY_SRC
           | TextureUsages::COPY_DST
-          // ?? remove ??
           | TextureUsages::TEXTURE_BINDING
           | TextureUsages::RENDER_ATTACHMENT,
       view_formats: &[],
@@ -179,34 +162,37 @@ pub fn setup_render_target(
 
   let export_image = ExportImage::new(size);
   let mut locked_images = exported_images.0.lock();
-  locked_images.push(export_image.clone());
+  locked_images.insert(target_name.clone(), export_image.clone());
 
-  log::info!("Setup exported images. It has {} images. Address of the container: {:?}", locked_images.len(), locked_images.as_ptr() as *const Vec<ExportImage>);
+//  log::info!("Setup exported images. It has {} images. Address of the container: {:?}", locked_images.len(), locked_images.as_ptr() as *const Vec<ExportImage>);
 
   commands.spawn(ImageExportBundle {
     source: export_sources.add(render_target_image_handle.clone().into()),
+    settings: ImageExportSettings::new(target_name.clone()),
     ..Default::default()
   });
 
-  (RenderTarget::Image(render_target_image_handle), export_image, viewports)
+  (RenderTarget::Image(render_target_image_handle), viewports)
 }
 
 
 fn base64_browser_img<P, Container>(img: &ImageBuffer<P, Container>) -> anyhow::Result<String>
 where
-    P: Pixel + image::PixelWithColorType,
-    [P::Subpixel]: EncodableLayout,
-    Container: Deref<Target = [P::Subpixel]>,
+  P: Pixel + image::PixelWithColorType,
+  [P::Subpixel]: EncodableLayout,
+  Container: Deref<Target = [P::Subpixel]>,
 {
-    let mut image_data: Vec<u8> = Vec::new();
-    img.write_to(&mut Cursor::new(&mut image_data), ImageOutputFormat::WebP)?;
-    let res_base64 = general_purpose::STANDARD.encode(image_data);
-    Ok(format!("data:image/webp;base64,{}", res_base64))
+  let mut image_data: Vec<u8> = Vec::new();
+  img.write_to(&mut Cursor::new(&mut image_data), ImageOutputFormat::WebP)?;
+  let res_base64 = general_purpose::STANDARD.encode(image_data);
+  Ok(format!("data:image/webp;base64,{}", res_base64))
 }
 
-fn white_img_placeholder(w: u32, h: u32) -> String {
-    let img = RgbaImage::new(w, h);
 
-    // img.iter_mut().for_each(|pixel| *pixel = 255);
-    base64_browser_img(&img).unwrap()
+fn white_img_placeholder(w: u32, h: u32) -> String
+{
+  let img = RgbaImage::new(w, h);
+
+  // img.iter_mut().for_each(|pixel| *pixel = 255);
+  base64_browser_img(&img).unwrap()
 }

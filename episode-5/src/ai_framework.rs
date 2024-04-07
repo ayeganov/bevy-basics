@@ -1,9 +1,6 @@
 use bevy::prelude::*;
-use bevy::render::texture::Image;
 use image::{ImageBuffer, Rgba};
-use std::{path::Path, ops::Deref};
-
-use rand::prelude::*;
+use std::path::Path;
 
 use crate::vision::{Vision as VisionSensor, VisionView};
 
@@ -43,7 +40,7 @@ fn save_image_to_disk(image: &ImageBuffer<Rgba<u8>, Vec<u8>>, path: &Path) -> Re
 //    let image_buffer = ImageBuffer::<Rgba<u8>, _>::from_raw(width, height, data)
 //        .ok_or(image::ImageError::Decoding(image::error::DecodingError::new(image::error::ImageFormatHint::Unknown, "Failed to create image buffer from raw data")))?;
 
-    info!("Address of image buffer: {:?}", image.as_ptr());
+    debug!("Address of image buffer: {:?}", image.as_ptr());
     image.save(path)
   }
   else
@@ -62,8 +59,6 @@ impl Sensing for VisionSensor
 {
   fn sense(&self, environment: Environment, vision_views: &VisionView) -> Option<Vec<f32>>
   {
-    let mut rng = rand::thread_rng();
-
     let row_number = 25;
     match environment
     {
@@ -71,14 +66,13 @@ impl Sensing for VisionSensor
       {
         if let Some(ref view_params) = self.visual_sensor
         {
-          let image = &vision_views.get_view(&view_params);
-          let frame_id = rng.next_u32();
+          let (image, frame_id) = &vision_views.get_view(&view_params);
           let filename = format!("/tmp/{}/ai_agent_{}.png", self.id, frame_id);
           let path = Path::new(filename.as_str());
 
           match save_image_to_disk(&image, path)
           {
-            Ok(_) => info!("Image saved to disk"),
+            Ok(_) => debug!("Image saved to disk"),
             Err(e) => error!("Error saving image to disk: {:?}", e),
           }
 

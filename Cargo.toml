@@ -6,7 +6,7 @@ members = [
   "episode-3",
   "episode-4",
   "episode-5",
-  "bevy_headless",
+  "gpu_copy",
   "minimal_example",
 ]
 

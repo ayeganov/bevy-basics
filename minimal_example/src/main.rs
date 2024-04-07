@@ -8,19 +8,19 @@ use bevy::{
     render::{camera::{Camera, RenderTarget}, color::Color, texture::Image},
     transform::components::Transform, window::PrimaryWindow,
 };
-use bevy_headless::{CurrImageContainer, HeadlessPlugin, ImageSource};
+use gpu_copy::{CurrImageContainer, HeadlessPlugin, ImageSource};
 
 
 fn setup(
     mut commands: Commands,
     mut images: ResMut<Assets<Image>>,
-    mut scene_controller: ResMut<bevy_headless::SceneInfo>,
+    mut scene_controller: ResMut<gpu_copy::SceneInfo>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut export_sources: ResMut<Assets<ImageSource>>,
     windows: Query<&PrimaryWindow>,
 ) {
-    let render_target = bevy_headless::setup_render_target(
+    let render_target = gpu_copy::setup_render_target(
       &mut commands,
       &mut images,
       &mut scene_controller,
@@ -91,13 +91,13 @@ pub fn main()
   pretty_env_logger::formatted_builder()
       .filter_module("minimal", log::LevelFilter::Info)
       .filter_module("bevy", log::LevelFilter::Info)
-      .filter_module("bevy_headless", log::LevelFilter::Info)
+      .filter_module("gpu_copy", log::LevelFilter::Info)
       .init();
 
   let (w, h) = (1280, 720);
 
   Engine::new()
-      .insert_resource(bevy_headless::SceneInfo::new(w, h))
+      .insert_resource(gpu_copy::SceneInfo::new(w, h))
       .insert_resource(ClearColor(Color::rgb_u8(0, 0, 0)))
 //      .add_plugins(DefaultPlugins)
       .add_plugins((

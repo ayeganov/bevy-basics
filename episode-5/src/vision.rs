@@ -1,7 +1,7 @@
 use std::marker::PhantomData;
 
 use bevy::{
-  core_pipeline::clear_color::{ClearColorConfig, self},
+  core_pipeline::clear_color::ClearColorConfig,
   prelude::*,
   math::vec4,
   render::{
@@ -19,11 +19,12 @@ use bevy_mod_picking::prelude::*;
 
 use crate::schedule::InGameSet;
 use crate::ai_framework::Sensor;
-use crate::gpu_copy::image_copy::ImageCopier;
 
-use bevy_headless::{ImageSource, ExportImage, ExportedImages};
-use image::{SubImage, RgbaImage, GenericImageView, ImageBuffer, Rgba};
+use gpu_copy::{ImageSource, ExportedImages};
+use image::{GenericImageView, ImageBuffer, Rgba};
 
+
+const VISION: &str = "Vision";
 
 #[derive(Debug, Default, Clone)]
 pub struct ViewParams
@@ -45,14 +46,18 @@ pub struct VisionView<'w, 's>
 
 impl<'w, 's> VisionView<'w, 's>
 {
-  pub fn get_view(&self, params: &ViewParams) -> ImageBuffer<Rgba<u8>, Vec<u8>>
+  pub fn get_view(&self, params: &ViewParams) -> (ImageBuffer<Rgba<u8>, Vec<u8>>, u64)
   {
     let locked_images = self.exported_images.0.lock();
-//    info!("Get view exported images. It has {} images. Address of the container: {:?}", locked_images.len(), locked_images.as_ptr() as *const Vec<ExportImage>);
-    // TODO: must refactor the 0 index to actually fetch the correct image
-    let image = &locked_images[0].0.read();
-//    info!("Params for view: {:?}", params);
-    image.view(params.x, params.y, params.width, params.height).to_image()
+    if let Some(image) = &locked_images.get(VISION)
+    {
+      let image = &image.0.read();
+      (image.img_buffer.view(params.x, params.y, params.width, params.height).to_image(), image.frame_id)
+    }
+    else
+    {
+      (ImageBuffer::new(1, 1), 0)
+    }
   }
 }
 
@@ -157,8 +162,9 @@ fn add_vision(mut images: ResMut<Assets<Image>>,
     return;
   }
 
-  let viewport_size = (50, 20);
-  let (render_target, destination, viewports) = bevy_headless::setup_render_target(
+  let viewport_size = (200, 50);
+  let (render_target, viewports) = gpu_copy::setup_render_target(
+    &VISION.to_string(),
     &mut commands,
     &mut images,
     &mut export_sources,
@@ -232,65 +238,6 @@ fn add_vision(mut images: ResMut<Assets<Image>>,
 }
 
 
-fn create_vision_sensor(commands: &mut Commands, render_device: &Res<RenderDevice>, images: &mut ResMut<Assets<Image>>) -> (Handle<Image>, Handle<Image>)
-{
-  let size = Extent3d {
-    width: 50,
-    height: 20,
-    ..default()
-  };
-
-  let mut render_target_image = Image
-  {
-    texture_descriptor: TextureDescriptor {
-      label: Some("Vision Source"),
-      size,
-      dimension: TextureDimension::D2,
-      format: TextureFormat::Rgba8UnormSrgb,
-      mip_level_count: 1,
-      sample_count: 1,
-      usage: TextureUsages::TEXTURE_BINDING
-          | TextureUsages::COPY_DST
-          | TextureUsages::COPY_SRC
-          | TextureUsages::RENDER_ATTACHMENT,
-      view_formats: &[],
-    },
-    ..default()
-  };
-
-  render_target_image.resize(size);
-  let render_target_image_handle = images.add(render_target_image);
-
-  let mut cpu_image = Image
-  {
-    texture_descriptor: TextureDescriptor {
-      label: Some("Vision Destination"),
-      size,
-      dimension: TextureDimension::D2,
-      format: TextureFormat::Rgba8UnormSrgb,
-      mip_level_count: 1,
-      sample_count: 1,
-      usage: TextureUsages::COPY_DST | TextureUsages::TEXTURE_BINDING,
-      view_formats: &[],
-    },
-    ..Default::default()
-  };
-  cpu_image.resize(size);
-
-  let cpu_image_handle = images.add(cpu_image);
-
-  commands.spawn(ImageCopier::new(
-    render_target_image_handle.clone(),
-    cpu_image_handle.clone(),
-    size,
-    render_device
-  ));
-
-
-  (render_target_image_handle, cpu_image_handle)
-}
-
-
 fn make_pickable(mut commands: Commands,
                  meshes: Query<Entity, (With<Handle<Mesh>>, Without<Pickable>)>,
 )
@@ -339,7 +286,6 @@ fn attach_vision_camera(commands: &mut Commands,
     {
       // render before the "main pass" camera
       order: vision.id,
-//      target: RenderTarget::Image(vision.visual_sensor.clone()),
       viewport: Some(Viewport {
         physical_position: UVec2::new(0, 0),
         physical_size: UVec2::new(256, 256),

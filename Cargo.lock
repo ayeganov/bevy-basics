@@ -772,22 +772,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "bevy_headless"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "base64 0.21.7",
- "bevy",
- "bytemuck",
- "futures",
- "futures-lite 2.3.0",
- "image",
- "log",
- "parking_lot",
- "wgpu",
-]
-
-[[package]]
 name = "bevy_hierarchy"
 version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2052,9 +2036,9 @@ version = "0.1.0"
 dependencies = [
  "bevy",
  "bevy_editor_pls",
- "bevy_headless",
  "bevy_mod_picking",
  "futures-intrusive",
+ "gpu_copy",
  "image",
  "pollster",
  "rand",
@@ -2601,6 +2585,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "gpu_copy"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "base64 0.21.7",
+ "bevy",
+ "bytemuck",
+ "futures",
+ "futures-lite 2.3.0",
+ "image",
+ "log",
+ "parking_lot",
+ "wgpu",
+]
+
+[[package]]
 name = "grid"
 version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3043,7 +3043,7 @@ name = "minimal"
 version = "0.1.0"
 dependencies = [
  "bevy",
- "bevy_headless",
+ "gpu_copy",
  "log",
  "pretty_env_logger",
 ]
