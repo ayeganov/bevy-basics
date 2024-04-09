@@ -325,8 +325,8 @@ fn unselect_vision(selected_vision: Entity,
 
 fn handle_vision_selection(mut selected: EventReader<VisionSelected>,
                            mut params: ParamSet<(
-                               Query<(Entity, &mut Vision), With<Vision>>,
-                               Query<(Entity, &Vision), (With<Vision>, With<PickSelection>)>
+                               Query<(Entity, &mut Sensor), With<Sensor>>,
+                               Query<(Entity, &Sensor), (With<Sensor>, With<PickSelection>)>
                            )>,
                            mut commands: Commands,
 )
@@ -337,8 +337,14 @@ fn handle_vision_selection(mut selected: EventReader<VisionSelected>,
     if !already_selected_query.is_empty()
     {
       let (selected_vision, vision) = already_selected_query.single();
-      detach_vision_camera(vision.selected_cam_id, &mut commands);
-      unselect_vision(selected_vision, &mut commands);
+      match vision
+      {
+        Sensor::Vision(ref vision) =>
+        {
+          detach_vision_camera(vision.selected_cam_id, &mut commands);
+          unselect_vision(selected_vision, &mut commands);
+        }
+      }
     }
   }
 
@@ -353,7 +359,13 @@ fn handle_vision_selection(mut selected: EventReader<VisionSelected>,
           is_selected: true
         });
 
-        vision.selected_cam_id = Some(attach_vision_camera(&mut commands, vision_id, &vision));
+        match *vision
+        {
+          Sensor::Vision(ref mut vision) =>
+          {
+            vision.selected_cam_id = Some(attach_vision_camera(&mut commands, vision_id, &vision));
+          }
+        }
         return;
       }
     }
