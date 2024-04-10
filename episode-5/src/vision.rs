@@ -1,11 +1,9 @@
 use std::marker::PhantomData;
 
 use bevy::{
-  core_pipeline::clear_color::ClearColorConfig,
   prelude::*,
-  math::vec4,
   render::{
-    camera::Viewport,
+    camera::{Viewport, ClearColorConfig},
     view::RenderLayers
   },
   ecs::system::SystemParam
@@ -195,11 +193,11 @@ fn add_vision(mut images: ResMut<Assets<Image>>,
         {
           camera_3d: Camera3d
           {
-            clear_color: current_cc,
             ..default()
           },
           camera: Camera
           {
+            clear_color: current_cc,
             // render before the "main pass" camera
             order: vision.id,
             target: render_target.clone(),
@@ -249,17 +247,17 @@ fn make_pickable(mut commands: Commands,
 const HIGHLIGHT_TINT: Highlight<StandardMaterial> = Highlight
 {
   hovered: Some(HighlightKind::new_dynamic(|matl| StandardMaterial {
-    base_color: matl.base_color + vec4(-0.5, -0.3, 0.9, 0.8), // hovered is blue
+    base_color: matl.base_color + Color::rgba(-0.5, -0.3, 0.9, 0.8), // hovered is blue
     ..matl.to_owned()
   })),
 
   pressed: Some(HighlightKind::new_dynamic(|matl| StandardMaterial {
-    base_color: matl.base_color + vec4(-0.4, -0.4, 0.8, 0.8), // pressed is a different blue
+    base_color: matl.base_color + Color::rgba(-0.4, -0.4, 0.8, 0.8), // pressed is a different blue
     ..matl.to_owned()
   })),
 
   selected: Some(HighlightKind::new_dynamic(|matl| StandardMaterial {
-    base_color: matl.base_color + vec4(-0.4, 0.8, -0.4, 0.0), // selected is green
+    base_color: matl.base_color + Color::rgba(-0.4, 0.8, -0.4, 0.0), // selected is green
     ..matl.to_owned()
   })),
 };
@@ -273,11 +271,11 @@ fn attach_vision_camera(commands: &mut Commands,
   {
     camera_3d: Camera3d
     {
-      clear_color: ClearColorConfig::None,
       ..default()
     },
     camera: Camera
     {
+      clear_color: ClearColorConfig::None,
       // render before the "main pass" camera
       order: vision.id,
       viewport: Some(Viewport {

@@ -4,14 +4,15 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-bevy = "0.12.1"
-bevy_editor_pls = "0.7.0"
-bevy_mod_picking = "0.17.0"
+bevy.workspace = true
+#bevy_editor_pls = "0.7.0"
+bevy_mod_picking = "0.18.0"
 image = "0.24.9"
 rand = "0.8.5"
-wgpu = "0.17.1"
+wgpu.workspace = true
 pollster = "0.3"
 futures-intrusive = "0.5"
+#bevy_rapier3d = "0.18.0"
 gpu_copy = { path = "../gpu_copy"}
 
 # Enable a small amount of optimization in debug mode

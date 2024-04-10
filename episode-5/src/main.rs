@@ -20,7 +20,7 @@ use gpu_copy::GpuToCpuCpyPlugin;
 //use debug::DebugPlugin;
 use asset_loader::AssetLoaderPlugin;
 use asteroids::AsteroidPlugin;
-use bevy_editor_pls::prelude::*;
+//use bevy_editor_pls::prelude::*;
 use bevy_mod_picking::prelude::*;
 use camera::CameraPlugin;
 use collision_detection::CollisionDetectionPlugin;
@@ -40,7 +40,7 @@ fn main()
     .insert_resource(ClearColor(Color::rgb(0.1, 0.0, 0.15)))
     .insert_resource(AmbientLight {
       color: Color::default(),
-      brightness: 0.75,
+      brightness: 800.0,
     })
     .add_plugins(DefaultPlugins)
     // User defined plugins.

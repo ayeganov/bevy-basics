@@ -4,7 +4,8 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-bevy = "0.12.0"
+bevy = "0.13.1"
+bevy_rapier3d = { version = "0.25.0", features = ["debug-render-3d"] }
 
 # Enable a small amount of optimization in debug mode
 [profile.dev]

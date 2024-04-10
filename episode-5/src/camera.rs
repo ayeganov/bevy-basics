@@ -2,7 +2,7 @@ use std::ops::Range;
 
 use bevy::{prelude::*, window::WindowResized};
 
-pub const CAMERA_DISTANCE: f32 = 80.0;
+pub const CAMERA_DISTANCE: f32 = 120.0;
 
 #[derive(Component, Debug)]
 pub struct MainCamera;
