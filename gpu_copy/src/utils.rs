@@ -188,7 +188,7 @@ pub fn setup_render_target(
 //  log::info!("Setup exported images. It has {} images. Address of the container: {:?}", locked_images.len(), locked_images.as_ptr() as *const Vec<ExportImage>);
 
   commands.spawn(ImageExportBundle {
-    source: export_sources.add(render_target_image_handle.clone().into()),
+    source: export_sources.add(render_target_image_handle.clone()),
     settings: ImageExportSettings::new(target_name.clone()),
     ..Default::default()
   });

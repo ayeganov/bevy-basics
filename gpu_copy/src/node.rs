@@ -4,14 +4,15 @@ use bevy::{
     ecs::world::World,
     render::{
         render_asset::RenderAssets,
-        render_graph::{Node, NodeRunError, RenderGraphContext},
+        render_graph::{Node, NodeRunError, RenderGraphContext, RenderLabel},
         render_resource::{ImageCopyBuffer, ImageDataLayout},
         renderer::RenderContext,
         texture::Image,
     },
 };
 
-pub const NODE_NAME: &str = "image_export";
+#[derive(Debug, Hash, PartialEq, Eq, Clone, RenderLabel)]
+pub struct NodeName;
 
 pub struct ImageExportNode;
 impl Node for ImageExportNode
