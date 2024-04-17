@@ -52,7 +52,9 @@ fn update_velocity(mut query: Query<(&Acceleration, &mut Velocity)>, time: Res<T
 }
 
 fn update_position(mut query: Query<(&Velocity, &mut Transform)>, time: Res<Time>) {
+  info!("update pos num velocities: {}", query.iter().len());
     for (velocity, mut transform) in query.iter_mut() {
+  info!("movement state Velocity: {:?}, transform: {:?}", velocity, transform);
         transform.translation += velocity.value * time.delta_seconds();
     }
 }

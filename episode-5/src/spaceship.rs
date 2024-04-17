@@ -4,15 +4,15 @@ use rand::prelude::*;
 
 
 use crate::{
+  ai_agent::{Agent, Brain, RandomBrain},
   asset_loader::SceneAssets,
+  camera::{update_visible_range, VisibleRange},
   collision_detection::{Collider, CollisionDamage},
-  camera::{VisibleRange, update_visible_range},
   health::Health,
   movement::{Acceleration, MovingObjectBundle, Velocity},
-  vision::VisionObjectBundle,
   schedule::InGameSet,
   state::GameState,
-  ai_agent::AiAgent
+  vision::VisionObjectBundle
 };
 
 
@@ -29,7 +29,7 @@ const MISSILE_RADIUS: f32 = 0.3;
 const MISSILE_HEALTH: f32 = 1.0;
 const MISSILE_COLLISION_DAMAGE: f32 = 5.0;
 const MISSILE_SCALE: Vec3 = Vec3::splat(0.3);
-const NUM_SPACESHIPS: u16 = 60;
+const NUM_SPACESHIPS: u16 = 1;
 
 
 #[derive(Component, Debug)]
@@ -59,12 +59,20 @@ impl Plugin for SpaceshipPlugin
           spaceship_movement_controls,
           spaceship_weapon_controls,
           spaceship_shield_controls,
+          debug_system,
         )
         .chain()
         .in_set(InGameSet::UserInput),
       )
       .add_systems(Update, spaceship_destroyed.in_set(InGameSet::EntityUpdates));
   }
+}
+
+
+fn debug_system(query: Query<(Entity, &Velocity, &Spaceship, &Agent), With<Velocity>>) {
+    for (entity, velocity, _, _) in query.iter() {
+        info!("Debug Entity: {:?}, Velocity: {:?}", entity, velocity);
+    }
 }
 
 
@@ -108,12 +116,15 @@ fn spawn_spaceship(commands: &mut Commands,
         ..default()
       },
     },
-    VisionObjectBundle::new(spaceship_num as isize),
     Spaceship,
-    AiAgent,
+    Agent,
     Health::new(SPACESHIP_HEALTH),
     CollisionDamage::new(SPACESHIP_COLLISION_DAMAGE),
-  ));
+  ))
+  .with_children(|parent| {
+    parent.spawn(VisionObjectBundle::new(spaceship_num as isize));
+    parent.spawn(Brain::Random(RandomBrain::default()));
+  });
 }
 
 

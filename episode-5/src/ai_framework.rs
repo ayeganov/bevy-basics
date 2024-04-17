@@ -70,11 +70,11 @@ impl Sensing for VisionSensor
           let filename = format!("/tmp/{}/ai_agent_{}.png", self.id, frame_id);
           let path = Path::new(filename.as_str());
 
-          match save_image_to_disk(&image, path)
-          {
-            Ok(_) => debug!("Image saved to disk"),
-            Err(e) => error!("Error saving image to disk: {:?}", e),
-          }
+//          match save_image_to_disk(&image, path)
+//          {
+//            Ok(_) => debug!("Image saved to disk"),
+//            Err(e) => error!("Error saving image to disk: {:?}", e),
+//          }
 
 //            info!("image data: {:?}", image.data);
 
