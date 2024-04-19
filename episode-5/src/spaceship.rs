@@ -29,7 +29,7 @@ const MISSILE_RADIUS: f32 = 0.3;
 const MISSILE_HEALTH: f32 = 1.0;
 const MISSILE_COLLISION_DAMAGE: f32 = 5.0;
 const MISSILE_SCALE: Vec3 = Vec3::splat(0.3);
-const NUM_SPACESHIPS: u16 = 1;
+const NUM_SPACESHIPS: u16 = 30;
 
 
 #[derive(Component, Debug)]
@@ -56,23 +56,15 @@ impl Plugin for SpaceshipPlugin
       .add_systems(
         Update,
         (
-          spaceship_movement_controls,
+//          spaceship_movement_controls,
           spaceship_weapon_controls,
           spaceship_shield_controls,
-          debug_system,
         )
         .chain()
         .in_set(InGameSet::UserInput),
       )
       .add_systems(Update, spaceship_destroyed.in_set(InGameSet::EntityUpdates));
   }
-}
-
-
-fn debug_system(query: Query<(Entity, &Velocity, &Spaceship, &Agent), With<Velocity>>) {
-    for (entity, velocity, _, _) in query.iter() {
-        info!("Debug Entity: {:?}, Velocity: {:?}", entity, velocity);
-    }
 }
 
 

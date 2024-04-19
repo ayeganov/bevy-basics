@@ -74,7 +74,6 @@ fn spawn_asteroid(
   visible_range: Res<VisibleRange>,
 )
 {
-  return;
   spawn_timer.timer.tick(time.delta());
   if !spawn_timer.timer.just_finished() {
       return;

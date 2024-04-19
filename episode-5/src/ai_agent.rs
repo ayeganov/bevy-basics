@@ -199,7 +199,6 @@ fn update_agents(agents_query: Query<(Entity, &Children), With<Agent>>,
 
     let brain_output = brain_process(&mut brain_query, &children, &sensations);
 
-    info!("Number of velocities: {}", transform_velocity_q.iter().len());
     if let Ok((mut transform, mut velocity)) = transform_velocity_q.get_mut(agent_entity)
     {
       update_agent_state(&mut transform, &mut velocity, &brain_output, &time);
@@ -222,26 +221,22 @@ fn update_agent_state(transform: &mut Transform,
 
   if do_rotate_right
   {
-//    info!("right");
     rotation = -ROTATION_SPEED * time.delta_seconds();
   }
   else if do_rotate_left
   {
-//    info!("left");
     rotation = ROTATION_SPEED * time.delta_seconds();
   }
 
-  let do_move_forward = brain_output[ActionIndex::Movement as usize] < -0.1;
-  let do_move_backward = brain_output[ActionIndex::Movement as usize] > 0.1;
+  let do_move_forward = brain_output[ActionIndex::Movement as usize] < 0.4;
+  let do_move_backward = brain_output[ActionIndex::Movement as usize] > 0.5;
 
   if do_move_backward
   {
-//    info!("backward");
     movement = -SPEED;
   }
   else if do_move_forward
   {
-//    info!("forward");
     movement = SPEED;
   }
 
@@ -249,9 +244,5 @@ fn update_agent_state(transform: &mut Transform,
   // Ignores the Z-axis rotation applied below.
   transform.rotate_y(rotation);
 
-  info!("agent state Velocity: {:?},\ntransform: {:?},\nmovement: {},\nforward: {:?}", velocity, transform, movement, transform.forward());
-
-  let value = transform.forward() * movement;
-  info!("velocity value: {}", value);
   velocity.value = transform.forward() * movement;
 }
