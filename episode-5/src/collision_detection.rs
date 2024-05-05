@@ -4,7 +4,8 @@ use crate::{
     asteroids::Asteroid,
     health::Health,
     schedule::InGameSet,
-    spaceship::{Spaceship, SpaceshipMissile},
+    spaceship::Spaceship,
+    event_handler::SpaceshipMissile
 };
 
 #[derive(Component, Debug)]

@@ -77,6 +77,22 @@ impl Default for RandomBrain
 }
 
 
+#[derive(Event, Debug)]
+pub struct ShootEvent
+{
+  pub entity: Entity,
+}
+
+
+impl ShootEvent
+{
+  pub fn new(entity: Entity) -> Self
+  {
+    Self { entity }
+  }
+}
+
+
 pub trait AgentBrain
 {
   // TODO: How to collect inputs?
@@ -125,7 +141,8 @@ impl Plugin for AiAgentPlugin
 {
   fn build(&self, app: &mut App)
   {
-    app.add_systems(Update, update_agents);
+    app.add_systems(Update, update_agents)
+       .add_event::<ShootEvent>();
   }
 }
 
@@ -190,6 +207,7 @@ fn update_agents(agents_query: Query<(Entity, &Children), With<Agent>>,
                  mut brain_query: Query<&mut Brain>,
                  mut transform_velocity_q: Query<(&mut Transform, &mut Velocity), With<Agent>>,
                  vision_view: VisionView,
+                 mut shooting_event_writer: EventWriter<ShootEvent>,
                  time: Res<Time>,
 )
 {
@@ -201,15 +219,22 @@ fn update_agents(agents_query: Query<(Entity, &Children), With<Agent>>,
 
     if let Ok((mut transform, mut velocity)) = transform_velocity_q.get_mut(agent_entity)
     {
-      update_agent_state(&mut transform, &mut velocity, &brain_output, &time);
+      update_agent_state(agent_entity,
+                         &mut transform,
+                         &mut velocity,
+                         &brain_output,
+                         &mut shooting_event_writer,
+                         &time);
     }
   }
 }
 
 
-fn update_agent_state(transform: &mut Transform,
+fn update_agent_state(agent_entity: Entity,
+                      transform: &mut Transform,
                       velocity: &mut Velocity,
                       brain_output: &Vec<f32>,
+                      shooting_event_writer: &mut EventWriter<ShootEvent>,
                       time: &Res<Time>,
 )
 {
@@ -238,6 +263,13 @@ fn update_agent_state(transform: &mut Transform,
   else if do_move_forward
   {
     movement = SPEED;
+  }
+
+
+  let do_shoot = brain_output[ActionIndex::Shooting as usize] > 0.98;
+  if do_shoot
+  {
+    shooting_event_writer.send(ShootEvent::new(agent_entity));
   }
 
   // Rotate around the Y-axis.

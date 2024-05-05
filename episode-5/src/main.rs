@@ -1,36 +1,38 @@
+mod ai_agent;
+mod ai_framework;
 mod asset_loader;
 mod asteroids;
 mod camera;
 mod collision_detection;
 mod debug;
 mod despawn;
+mod event_handler;
 mod health;
 mod movement;
 mod schedule;
 mod spaceship;
 mod state;
 mod vision;
-mod ai_agent;
-mod ai_framework;
 
 use bevy::prelude::*;
 
 use gpu_copy::GpuToCpuCpyPlugin;
 
 //use debug::DebugPlugin;
+//use bevy_editor_pls::prelude::*;
+use ai_agent::AiAgentPlugin;
 use asset_loader::AssetLoaderPlugin;
 use asteroids::AsteroidPlugin;
-//use bevy_editor_pls::prelude::*;
 use bevy_mod_picking::prelude::*;
 use camera::CameraPlugin;
 use collision_detection::CollisionDetectionPlugin;
 use despawn::DespawnPlugin;
+use event_handler::EventHandlerPlugin;
 use movement::MovementPlugin;
 use schedule::SchedulePlugin;
 use spaceship::SpaceshipPlugin;
 use state::StatePlugin;
 use vision::VisionPlugin;
-use ai_agent::AiAgentPlugin;
 
 
 fn main()
@@ -57,6 +59,7 @@ fn main()
     .add_plugins(VisionPlugin)
     .add_plugins(AiAgentPlugin)
     .add_plugins(GpuToCpuCpyPlugin)
+    .add_plugins(EventHandlerPlugin)
 //    .add_plugins(EditorPlugin::default())
     // .add_plugins(DebugPlugin)
     .run();
