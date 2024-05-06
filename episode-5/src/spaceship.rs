@@ -23,7 +23,7 @@ const SPACESHIP_ROLL_SPEED: f32 = 2.5;
 const SPACESHIP_HEALTH: f32 = 100.0;
 const SPACESHIP_COLLISION_DAMAGE: f32 = 100.0;
 const SPACESHIP_SCALE: Vec3 = Vec3::splat(0.2);
-const MISSILE_SPEED: f32 = 50.0;
+const MISSILE_SPEED: f32 = 25.0;
 const MISSILE_FORWARD_SPAWN_SCALAR: f32 = 2.0;
 const MISSILE_RADIUS: f32 = 0.3;
 const MISSILE_HEALTH: f32 = 1.0;
@@ -109,12 +109,12 @@ fn spawn_spaceship(commands: &mut Commands,
       },
     },
     Spaceship,
+    VisionObjectBundle::new(spaceship_num as isize),
     Agent,
     Health::new(SPACESHIP_HEALTH),
     CollisionDamage::new(SPACESHIP_COLLISION_DAMAGE),
   ))
   .with_children(|parent| {
-    parent.spawn(VisionObjectBundle::new(spaceship_num as isize));
     parent.spawn(Brain::Random(RandomBrain::default()));
   });
 }

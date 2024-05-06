@@ -6,6 +6,7 @@ use crate::ai_framework::Environment;
 use crate::movement::Velocity;
 use crate::ai_framework::Sensor;
 use crate::ai_framework::Sensing;
+use crate::schedule::InGameSet;
 use crate::vision::VisionView;
 
 const ROTATION_SPEED: f32 = 2.5;
@@ -141,7 +142,7 @@ impl Plugin for AiAgentPlugin
 {
   fn build(&self, app: &mut App)
   {
-    app.add_systems(Update, update_agents)
+    app.add_systems(Update, update_agents.in_set(InGameSet::EntityUpdates))
        .add_event::<ShootEvent>();
   }
 }
@@ -266,7 +267,7 @@ fn update_agent_state(agent_entity: Entity,
   }
 
 
-  let do_shoot = brain_output[ActionIndex::Shooting as usize] > 0.98;
+  let do_shoot = brain_output[ActionIndex::Shooting as usize] > 0.95;
   if do_shoot
   {
     shooting_event_writer.send(ShootEvent::new(agent_entity));
