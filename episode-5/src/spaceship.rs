@@ -4,15 +4,15 @@ use rand::prelude::*;
 
 
 use crate::{
+  ai_agent::{Agent, Brain, RandomBrain},
   asset_loader::SceneAssets,
+  camera::{update_visible_range, VisibleRange},
   collision_detection::{Collider, CollisionDamage},
-  camera::{VisibleRange, update_visible_range},
   health::Health,
   movement::{Acceleration, MovingObjectBundle, Velocity},
-  vision::VisionObjectBundle,
   schedule::InGameSet,
   state::GameState,
-  ai_agent::AiAgent
+  vision::VisionObjectBundle
 };
 
 
@@ -23,13 +23,13 @@ const SPACESHIP_ROLL_SPEED: f32 = 2.5;
 const SPACESHIP_HEALTH: f32 = 100.0;
 const SPACESHIP_COLLISION_DAMAGE: f32 = 100.0;
 const SPACESHIP_SCALE: Vec3 = Vec3::splat(0.2);
-const MISSILE_SPEED: f32 = 50.0;
+const MISSILE_SPEED: f32 = 25.0;
 const MISSILE_FORWARD_SPAWN_SCALAR: f32 = 2.0;
 const MISSILE_RADIUS: f32 = 0.3;
 const MISSILE_HEALTH: f32 = 1.0;
 const MISSILE_COLLISION_DAMAGE: f32 = 5.0;
 const MISSILE_SCALE: Vec3 = Vec3::splat(0.3);
-const NUM_SPACESHIPS: u16 = 60;
+const NUM_SPACESHIPS: u16 = 30;
 
 
 #[derive(Component, Debug)]
@@ -56,7 +56,7 @@ impl Plugin for SpaceshipPlugin
       .add_systems(
         Update,
         (
-          spaceship_movement_controls,
+//          spaceship_movement_controls,
           spaceship_weapon_controls,
           spaceship_shield_controls,
         )
@@ -108,12 +108,15 @@ fn spawn_spaceship(commands: &mut Commands,
         ..default()
       },
     },
-    VisionObjectBundle::new(spaceship_num as isize),
     Spaceship,
-    AiAgent,
+    VisionObjectBundle::new(spaceship_num as isize),
+    Agent,
     Health::new(SPACESHIP_HEALTH),
     CollisionDamage::new(SPACESHIP_COLLISION_DAMAGE),
-  ));
+  ))
+  .with_children(|parent| {
+    parent.spawn(Brain::Random(RandomBrain::default()));
+  });
 }
 
 

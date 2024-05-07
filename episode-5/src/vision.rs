@@ -372,7 +372,7 @@ fn handle_vision_selection(mut selected: EventReader<VisionSelected>,
 
 
 fn draw_selected_vision(mut gizmos: Gizmos,
-                        query_vision: Query<(Entity, &Children, &PickSelection), (With<Vision>, With<PickSelection>)>,
+                        query_vision: Query<(Entity, &Children, &PickSelection), (With<Sensor>, With<PickSelection>)>,
                         query_proj: Query<(&Projection, &GlobalTransform), Without<VisionCam>>)
 {
   for (_vision, children, pick) in query_vision.iter()
